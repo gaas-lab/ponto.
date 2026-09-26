@@ -24,7 +24,7 @@ export function AuthScreen({ configured, darkMode, setDarkMode }) {
     setError('');
     setMessage('');
     if (!configured) {
-      setError('Conecte o projeto Supabase usando as variáveis de ambiente para habilitar o acesso.');
+      setError('O Supabase ainda não está configurado neste endereço. Adicione as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY na Vercel e publique novamente.');
       return;
     }
     if (isSignup && password.length < 8) {
@@ -66,12 +66,11 @@ export function AuthScreen({ configured, darkMode, setDarkMode }) {
       <div className="auth-card"><div className="auth-card-heading"><span className="auth-small-brand"><span className="brand-mark"><Clock3 size={17} /></span> Ponto<span className="brand-dot">.</span></span><p className="eyebrow">{isSignup ? 'COMECE POR AQUI' : 'BEM-VINDO DE VOLTA'}</p><h2>{isSignup ? 'Crie sua conta' : 'Entre na sua conta'}</h2><p className="auth-subtitle">{isSignup ? 'Seu espaço para acompanhar o seu tempo.' : 'Seu dia continua de onde você parou.'}</p></div>
         {message && <div className="auth-message success"><Check size={16} />{message}</div>}
         {error && <div className="auth-message error">{error}</div>}
-        {!configured && <div className="setup-message"><strong>Supabase ainda não conectado</strong><span>Preencha as variáveis do arquivo <code>.env.example</code> e também no painel da Vercel para ativar login e cadastro.</span></div>}
         <form className="auth-form" onSubmit={submit}>
-          {isSignup && <label className="auth-field"><span>Seu nome</span><div className="auth-input-wrap"><UserRound size={17} /><input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Como podemos te chamar?" required disabled={!configured} /></div></label>}
-          <label className="auth-field"><span>E-mail</span><div className="auth-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" required disabled={!configured} /></div></label>
-          <label className="auth-field"><span>Senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? 'Pelo menos 8 caracteres' : 'Sua senha'} required disabled={!configured} minLength={isSignup ? 8 : undefined} /></div></label>
-          <button className="auth-submit" type="submit" disabled={busy || !configured}>{busy ? <><LoaderCircle className="spin" size={17} />Aguarde…</> : <>{isSignup ? 'Criar minha conta' : 'Entrar'}<ArrowRight size={16} /></>}</button>
+          {isSignup && <label className="auth-field"><span>Seu nome</span><div className="auth-input-wrap"><UserRound size={17} /><input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Como podemos te chamar?" required disabled={busy} /></div></label>}
+          <label className="auth-field"><span>E-mail</span><div className="auth-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" required disabled={busy} /></div></label>
+          <label className="auth-field"><span>Senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? 'Pelo menos 8 caracteres' : 'Sua senha'} required disabled={busy} minLength={isSignup ? 8 : undefined} /></div></label>
+          <button className="auth-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} />Aguarde…</> : <>{isSignup ? 'Criar minha conta' : 'Entrar'}<ArrowRight size={16} /></>}</button>
         </form>
         <div className="auth-switch">{isSignup ? <><span>Já tem uma conta?</span><button onClick={() => switchView('login')}><ArrowLeft size={14} />Voltar para o login</button></> : <><span>Ainda não tem uma conta?</span><button onClick={() => switchView('signup')}>Criar cadastro <ArrowRight size={14} /></button></>}</div>
         <p className="auth-privacy"><LockKeyhole size={12} /> Seus registros ficam associados à sua conta.</p>

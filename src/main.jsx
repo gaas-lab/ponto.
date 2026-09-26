@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
@@ -45,15 +45,12 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(null);
   const userDaysKey = `${KEY}:${session.user.id}`;
-  const [days, setDays] = useState(() => {
-    try {
-      const saved = localStorage.getItem(userDaysKey);
-      if (saved) return JSON.parse(saved);
-      const legacy = localStorage.getItem(KEY);
-      if (legacy) { localStorage.setItem(userDaysKey, legacy); localStorage.removeItem(KEY); return JSON.parse(legacy); }
-      return {};
-    } catch { return {}; }
-  });
+  const [days, setDays] = useState({});
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceError, setAttendanceError] = useState('');
+  const [syncError, setSyncError] = useState('');
+  const lastDaysRef = useRef({});
+  const syncQueueRef = useRef(Promise.resolve());
   const [holidays, setHolidays] = useState({});
   const [holidayState, setHolidayState] = useState('loading');
   const [toast, setToast] = useState('');
@@ -64,7 +61,63 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   });
   const [profileOpen, setProfileOpen] = useState(false);
 
-  useEffect(() => { localStorage.setItem(userDaysKey, JSON.stringify(days)); }, [days, userDaysKey]);
+  useEffect(() => {
+    let active = true;
+    async function loadAttendance() {
+      setAttendanceLoading(true);
+      setAttendanceError('');
+      try {
+        const { data, error } = await supabase.from('attendance_records').select('work_date, marks');
+        if (error) throw error;
+        const remoteDays = Object.fromEntries((data || []).map((row) => [row.work_date, { marks: row.marks }]));
+        let localDays = {};
+        try { localDays = JSON.parse(localStorage.getItem(userDaysKey) || localStorage.getItem(KEY) || '{}'); }
+        catch { /* Ignore a malformed local cache; Supabase remains the source of truth. */ }
+        const mergedDays = { ...localDays, ...remoteDays };
+        const localOnlyRows = Object.entries(localDays)
+          .filter(([date]) => !Object.hasOwn(remoteDays, date))
+          .map(([work_date, record]) => ({ work_date, marks: record.marks || [] }));
+        if (localOnlyRows.length) {
+          const { error: migrationError } = await supabase.from('attendance_records').upsert(localOnlyRows, { onConflict: 'user_id,work_date' });
+          if (migrationError) throw migrationError;
+        }
+        if (!active) return;
+        lastDaysRef.current = mergedDays;
+        localStorage.setItem(userDaysKey, JSON.stringify(mergedDays));
+        localStorage.removeItem(KEY);
+        setDays(mergedDays);
+        setAttendanceLoading(false);
+      } catch (error) {
+        if (!active) return;
+        setAttendanceError(error.message || 'Não foi possível carregar seus pontos.');
+        setAttendanceLoading(false);
+      }
+    }
+    loadAttendance();
+    return () => { active = false; };
+  }, [session.user.id, userDaysKey]);
+  useEffect(() => {
+    if (attendanceLoading || attendanceError) return;
+    localStorage.setItem(userDaysKey, JSON.stringify(days));
+    const previous = lastDaysRef.current;
+    const changedRows = Object.entries(days)
+      .filter(([date, record]) => JSON.stringify(previous[date]) !== JSON.stringify(record))
+      .map(([work_date, record]) => ({ work_date, marks: record.marks || [] }));
+    const removedDates = Object.keys(previous).filter((date) => !Object.hasOwn(days, date));
+    lastDaysRef.current = days;
+    if (!changedRows.length && !removedDates.length) return;
+    syncQueueRef.current = syncQueueRef.current.then(async () => {
+      if (changedRows.length) {
+        const { error } = await supabase.from('attendance_records').upsert(changedRows, { onConflict: 'user_id,work_date' });
+        if (error) throw error;
+      }
+      if (removedDates.length) {
+        const { error } = await supabase.from('attendance_records').delete().in('work_date', removedDates);
+        if (error) throw error;
+      }
+      setSyncError('');
+    }).catch((error) => setSyncError(error.message || 'Não foi possível sincronizar seus pontos.'));
+  }, [days, attendanceLoading, attendanceError, userDaysKey]);
   useEffect(() => { localStorage.setItem(userProfileKey, JSON.stringify(profile)); }, [profile, userProfileKey]);
   useEffect(() => {
     const path = session.user.user_metadata?.avatar_path || profile.photoPath;
@@ -210,6 +263,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const todayNext = nextMark(todayMarks);
   const todayExpected = expectedExit(todayMarks);
 
+  if (attendanceLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seus pontos…</span></div>;
+  if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
+
   return <main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
@@ -243,7 +299,8 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     <section className="bottom-grid"><article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>Suas horas</h3></div><button className="text-button" onClick={() => document.getElementById('calendar')?.scrollIntoView({ behavior: 'smooth' })}>Ver calendário <ArrowRight size={15} /></button></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
       <article className="summary-card"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
-    <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados ficam salvos neste dispositivo</span></footer>
+    <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
+    {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
     {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onAdd={(time) => addMark(dateKey(selected), time)} onRemove={(idx) => removeMark(dateKey(selected), idx)} nextMark={nextMark(openDay.marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
