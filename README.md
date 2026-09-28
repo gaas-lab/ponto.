@@ -10,4 +10,10 @@
 
 The app uses Supabase Auth for email/password accounts. Run `supabase/setup.sql` in the Supabase SQL Editor to create the attendance table, per-user row-level security policies, and private avatar storage. Attendance records sync to Supabase and are isolated by the signed-in user's ID; existing local records are copied to the account on first load.
 
+## Planilhas de ponto
+
+Na seção do calendário, use **Baixar modelo** para obter `Modelo_importacao_pontos.xlsx`. Preencha a aba `Registros` com uma linha por dia e mantenha os cabeçalhos: `Data`, `Entrada`, `Saída para almoço`, `Volta do almoço` e `Fim do expediente`. As datas devem ser anteriores a hoje e os horários devem estar em sequência (`HH:MM`). A importação atualiza os registros do usuário na tabela `attendance_records`; se uma data já tiver batidas, o app pede confirmação antes de substituí-las.
+
+Para exportar, o botão **Exportar mês** baixa o mês exibido. Os campos **De** e **Até** permitem escolher qualquer período. O arquivo contém as abas `Resumo` e `Registros`; o resumo informa horas trabalhadas, dias completos, saldo e total de batidas no período.
+
 Run locally with `npm install` and `npm run dev`. The signup flow follows the email confirmation setting in Supabase; users return to the login screen after registration.

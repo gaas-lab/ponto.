@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
@@ -60,6 +60,12 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     catch { return { name: session.user.user_metadata?.full_name || 'Meu perfil', photo: '', photoPath: session.user.user_metadata?.avatar_path || '' }; }
   });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`);
+  const [rangeEnd, setRangeEnd] = useState(dateKey(today));
+  const [sheetMessage, setSheetMessage] = useState('');
+  const [sheetError, setSheetError] = useState('');
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -194,13 +200,13 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     if (back < out) back += 1440;
     return back - out;
   }
-  async function exportMonth() {
+  async function exportRange(startValue = rangeStart, endValue = rangeEnd) {
+    setSheetError('');
+    if (!startValue || !endValue || startValue > endValue) return setSheetError('Escolha um período válido, com a data inicial antes da final.');
     const XLSX = await import('xlsx');
-    const year = month.getFullYear();
-    const monthIndex = month.getMonth();
-    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const rows = Array.from({ length: daysInMonth }, (_, index) => {
-      const date = new Date(year, monthIndex, index + 1);
+    const dates = [];
+    for (let date = new Date(`${startValue}T12:00:00`); dateKey(date) <= endValue; date.setDate(date.getDate() + 1)) dates.push(new Date(date));
+    const rows = dates.map((date) => {
       const key = dateKey(date);
       const marks = days[key]?.marks || [];
       const complete = marks.length === 4;
@@ -217,12 +223,18 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         complete ? 'Completo' : marks.length ? 'Incompleto' : 'Sem batidas',
       ];
     });
-    const balanceText = workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : 'Sem dias completos';
+    const rangeEntries = Object.entries(days).filter(([key, record]) => key >= startValue && key <= endValue && record.marks?.length);
+    const rangeWorked = rangeEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks), 0);
+    const rangeComplete = rangeEntries.filter(([, record]) => record.marks.length === 4);
+    const rangeBalance = rangeComplete.reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+    const punchCount = rangeEntries.reduce((sum, [, record]) => sum + record.marks.length, 0);
+    const balanceText = rangeComplete.length ? `${rangeBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(rangeBalance))}` : 'Sem dias completos';
     const summary = XLSX.utils.aoa_to_sheet([
-      ['RESUMO DO MÊS', monthName(month)],
+      ['RESUMO DO PERÍODO', `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${startValue}T12:00:00`))} a ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${endValue}T12:00:00`))}`],
       ['Carga diária', '8h 48min'],
-      ['Horas trabalhadas', formatDuration(totalWorked)],
-      ['Dias com quatro batidas', workedDays],
+      ['Horas trabalhadas', formatDuration(rangeWorked)],
+      ['Total de batidas', punchCount],
+      ['Dias com quatro batidas', rangeComplete.length],
       ['Saldo acumulado', balanceText],
       ['Como o saldo é calculado', 'Soma dos saldos diários dos dias com quatro batidas.'],
       [],
@@ -238,7 +250,75 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, summary, 'Resumo');
     XLSX.utils.book_append_sheet(workbook, records, 'Registros');
-    XLSX.writeFile(workbook, `Ponto_${year}-${pad(monthIndex + 1)}.xlsx`);
+    XLSX.writeFile(workbook, `Ponto_${startValue}_a_${endValue}.xlsx`);
+  }
+  async function downloadTemplate() {
+    const XLSX = await import('xlsx');
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Data', 'Entrada', 'Saída para almoço', 'Volta do almoço', 'Fim do expediente'],
+    ]);
+    sheet['!cols'] = [{ wch: 16 }, { wch: 13 }, { wch: 21 }, { wch: 18 }, { wch: 21 }];
+    const instructions = XLSX.utils.aoa_to_sheet([
+      ['MODELO PARA IMPORTAÇÃO DE PONTOS ANTERIORES'],
+      ['Preencha uma linha por dia. A data deve ser anterior a hoje.'],
+      ['Use datas DD/MM/AAAA e horários HH:MM. As quatro batidas são opcionais, mas devem seguir a ordem.'],
+      ['Não altere os títulos das colunas da aba Registros. Linhas sem data serão ignoradas.'],
+    ]);
+    instructions['!cols'] = [{ wch: 100 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Registros');
+    XLSX.utils.book_append_sheet(workbook, instructions, 'Instruções');
+    XLSX.writeFile(workbook, 'Modelo_importacao_pontos.xlsx');
+  }
+  async function importSpreadsheet(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setSheetError(''); setSheetMessage(''); setSheetBusy(true);
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+      const sheet = workbook.Sheets.Registros || workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) throw new Error('A planilha não contém uma aba de registros.');
+      const records = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+      const normalize = (s) => String(s).trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const headers = Object.keys(records[0] || {}).reduce((out, key) => ({ ...out, [normalize(key)]: key }), {});
+      const dateColumn = headers.data;
+      const timeColumns = ['entrada', 'saida para almoco', 'volta do almoco', 'fim do expediente'].map((name) => headers[name]);
+      if (!dateColumn || timeColumns.some((col) => !col)) throw new Error('Use o modelo padrão e mantenha os títulos das cinco colunas.');
+      const todayKey = dateKey(new Date());
+      const parsed = records.filter((row) => row[dateColumn] !== '').map((row, index) => {
+        const rawDate = row[dateColumn];
+        let key = '';
+        if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) key = dateKey(rawDate);
+        else {
+          const value = String(rawDate).trim();
+          const localDate = value.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+          const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (localDate) key = `${localDate[3]}-${pad(localDate[2])}-${pad(localDate[1])}`;
+          else if (isoDate) key = `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || Number.isNaN(new Date(`${key}T12:00:00`).getTime()) || dateKey(new Date(`${key}T12:00:00`)) !== key) throw new Error(`Data inválida na linha ${index + 2}.`);
+        if (key >= todayKey) throw new Error(`A linha ${index + 2} tem data de hoje ou futura. Só é permitido importar dias anteriores a hoje.`);
+        const rawMarks = timeColumns.map((col) => String(row[col] ?? '').trim());
+        const firstBlank = rawMarks.indexOf('');
+        if (firstBlank >= 0 && rawMarks.slice(firstBlank).some(Boolean)) throw new Error(`Preencha as batidas em sequência na linha ${index + 2}.`);
+        const marks = rawMarks.filter(Boolean).map((time) => {
+          const normalized = time.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+          if (!normalized || Number(normalized[1]) > 23 || Number(normalized[2]) > 59) throw new Error(`Horário inválido na linha ${index + 2}: ${time}.`);
+          return `${pad(normalized[1])}:${normalized[2]}`;
+        });
+        if (marks.length > 4 || marks.some((time, i) => i > 0 && parseTime(time) <= parseTime(marks[i - 1]))) throw new Error(`Confira a ordem das batidas na linha ${index + 2}.`);
+        return [key, { marks }];
+      });
+      if (!parsed.length) throw new Error('Não encontrei linhas com datas para importar.');
+      if (new Set(parsed.map(([key]) => key)).size !== parsed.length) throw new Error('A planilha tem mais de uma linha para a mesma data.');
+      const collisions = parsed.filter(([key]) => days[key]?.marks?.length).length;
+      if (collisions && !window.confirm(`${collisions} dia(s) já têm registros e serão substituídos. Deseja continuar?`)) return;
+      setDays((current) => ({ ...current, ...Object.fromEntries(parsed) }));
+      setSheetMessage(`${parsed.length} dia(s) importado(s). Os registros serão sincronizados com sua conta.`);
+    } catch (error) { setSheetError(error.message || 'Não foi possível ler essa planilha.'); }
+    finally { setSheetBusy(false); }
   }
   async function saveProfile({ name, photoFile }) {
     let photo = profile.photo;
@@ -284,7 +364,12 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     </section>
 
     <section className="calendar-section" id="calendar">
-      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>Seu calendário</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={exportMonth} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar Excel</span><Download size={13} /></button></div></div>
+      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>Seu calendário</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
+      <div className="spreadsheet-tools">
+        <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button><input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
+        <form className="period-export" onSubmit={(e) => { e.preventDefault(); exportRange(); }}><label>De <input aria-label="Data inicial do período" type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} required /></label><label>Até <input aria-label="Data final do período" type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} required /></label><button className="tool-button primary" type="submit"><Download size={15} />Exportar período</button></form>
+        {(sheetError || sheetMessage) && <p className={`sheet-feedback ${sheetError ? 'error' : ''}`} role="status">{sheetError || sheetMessage}</p>}
+      </div>
       <div className="calendar-card">
         <div className="weekdays">{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => <div key={d}>{d}</div>)}</div>
         <div className="calendar-grid">{calendarDays.map((day, idx) => {
