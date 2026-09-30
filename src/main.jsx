@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
-import { AdminPanel } from './components/AdminPanel.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
 
@@ -43,9 +42,15 @@ function App() {
 
 function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const today = new Date();
+  const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(null);
-  const userDaysKey = `${KEY}:${session.user.id}`;
+  const [viewingUser, setViewingUser] = useState({ id: session.user.id, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Meus pontos' });
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminUsersError, setAdminUsersError] = useState('');
+  const activeUser = isMasterAdmin ? viewingUser : { id: session.user.id, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Meus pontos' };
+  const isViewingOwnData = activeUser.id === session.user.id;
+  const userDaysKey = `${KEY}:${activeUser.id}`;
   const [days, setDays] = useState({});
   const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState('');
@@ -61,8 +66,6 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     catch { return { name: session.user.user_metadata?.full_name || 'Meu perfil', photo: '', photoPath: session.user.user_metadata?.avatar_path || '' }; }
   });
   const [profileOpen, setProfileOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [rangeStart, setRangeStart] = useState(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`);
   const [rangeEnd, setRangeEnd] = useState(dateKey(today));
   const [sheetMessage, setSheetMessage] = useState('');
@@ -71,29 +74,54 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const importInputRef = useRef(null);
 
   useEffect(() => {
+    if (!isMasterAdmin) return;
+    let active = true;
+    supabase.rpc('admin_list_users').then(({ data, error }) => {
+      if (!active) return;
+      if (error) setAdminUsersError(error.message);
+      else { setAdminUsers(data || []); setAdminUsersError(''); }
+    });
+    return () => { active = false; };
+  }, [isMasterAdmin]);
+
+  function changeViewedUser(userId) {
+    const nextUser = adminUsers.find((user) => user.id === userId);
+    if (!nextUser || nextUser.id === activeUser.id) return;
+    setAttendanceLoading(true);
+    setAttendanceError('');
+    setSyncError('');
+    setSelected(null);
+    setDays({});
+    lastDaysRef.current = {};
+    setViewingUser(nextUser);
+  }
+
+  useEffect(() => {
     let active = true;
     async function loadAttendance() {
       setAttendanceLoading(true);
       setAttendanceError('');
       try {
-        const { data, error } = await supabase.from('attendance_records').select('work_date, marks');
+        const { data, error } = await supabase.from('attendance_records').select('work_date, marks').eq('user_id', activeUser.id);
         if (error) throw error;
         const remoteDays = Object.fromEntries((data || []).map((row) => [row.work_date, { marks: row.marks }]));
         let localDays = {};
-        try { localDays = JSON.parse(localStorage.getItem(userDaysKey) || localStorage.getItem(KEY) || '{}'); }
+        try { if (isViewingOwnData) localDays = JSON.parse(localStorage.getItem(userDaysKey) || localStorage.getItem(KEY) || '{}'); }
         catch { /* Ignore a malformed local cache; Supabase remains the source of truth. */ }
         const mergedDays = { ...localDays, ...remoteDays };
-        const localOnlyRows = Object.entries(localDays)
+        const localOnlyRows = isViewingOwnData ? Object.entries(localDays)
           .filter(([date]) => !Object.hasOwn(remoteDays, date))
-          .map(([work_date, record]) => ({ work_date, marks: record.marks || [] }));
+          .map(([work_date, record]) => ({ user_id: activeUser.id, work_date, marks: record.marks || [] })) : [];
         if (localOnlyRows.length) {
           const { error: migrationError } = await supabase.from('attendance_records').upsert(localOnlyRows, { onConflict: 'user_id,work_date' });
           if (migrationError) throw migrationError;
         }
         if (!active) return;
         lastDaysRef.current = mergedDays;
-        localStorage.setItem(userDaysKey, JSON.stringify(mergedDays));
-        localStorage.removeItem(KEY);
+        if (isViewingOwnData) {
+          localStorage.setItem(userDaysKey, JSON.stringify(mergedDays));
+          localStorage.removeItem(KEY);
+        }
         setDays(mergedDays);
         setAttendanceLoading(false);
       } catch (error) {
@@ -104,14 +132,14 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     }
     loadAttendance();
     return () => { active = false; };
-  }, [session.user.id, userDaysKey]);
+  }, [activeUser.id, isViewingOwnData, userDaysKey]);
   useEffect(() => {
     if (attendanceLoading || attendanceError) return;
-    localStorage.setItem(userDaysKey, JSON.stringify(days));
+    if (isViewingOwnData) localStorage.setItem(userDaysKey, JSON.stringify(days));
     const previous = lastDaysRef.current;
     const changedRows = Object.entries(days)
       .filter(([date, record]) => JSON.stringify(previous[date]) !== JSON.stringify(record))
-      .map(([work_date, record]) => ({ work_date, marks: record.marks || [] }));
+      .map(([work_date, record]) => ({ user_id: activeUser.id, work_date, marks: record.marks || [] }));
     const removedDates = Object.keys(previous).filter((date) => !Object.hasOwn(days, date));
     lastDaysRef.current = days;
     if (!changedRows.length && !removedDates.length) return;
@@ -121,12 +149,12 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         if (error) throw error;
       }
       if (removedDates.length) {
-        const { error } = await supabase.from('attendance_records').delete().in('work_date', removedDates);
+        const { error } = await supabase.from('attendance_records').delete().eq('user_id', activeUser.id).in('work_date', removedDates);
         if (error) throw error;
       }
       setSyncError('');
     }).catch((error) => setSyncError(error.message || 'Não foi possível sincronizar seus pontos.'));
-  }, [days, attendanceLoading, attendanceError, userDaysKey]);
+  }, [days, attendanceLoading, attendanceError, userDaysKey, activeUser.id, isViewingOwnData]);
   useEffect(() => { localStorage.setItem(userProfileKey, JSON.stringify(profile)); }, [profile, userProfileKey]);
   useEffect(() => {
     const path = session.user.user_metadata?.avatar_path || profile.photoPath;
@@ -253,7 +281,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, summary, 'Resumo');
     XLSX.utils.book_append_sheet(workbook, records, 'Registros');
-    const exportName = (profile.name || session.user.email || 'usuario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const exportName = ((isViewingOwnData ? profile.name : activeUser.full_name) || activeUser.email || 'usuario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
     XLSX.writeFile(workbook, `Ponto_${exportName}_${startValue}_a_${endValue}.xlsx`);
   }
   async function downloadTemplate() {
@@ -353,10 +381,10 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   return <main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
-      <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span>{isMasterAdmin && <button className="text-button" onClick={() => setAdminOpen(true)}>Administração</button>}<details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details></div>
+      <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span>{isMasterAdmin && <label className="calendar-user-picker"><span>Ver pontos de</span><select value={activeUser.id} onChange={(event) => changeViewedUser(event.target.value)} aria-label="Selecionar usuário para ver os pontos"><option value={session.user.id}>Meus pontos ({profile.name || session.user.email})</option>{adminUsers.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email}</option>)}</select></label>}<details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details></div>
     </header>
 
-    <section className="welcome-row"><div><p className="eyebrow">SEU TEMPO, BEM CUIDADO</p><h1>Bom dia<span className="greeting-dot">.</span></h1><p className="welcome-sub">Cada minuto conta. Acompanhe sua jornada.</p></div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
+    <section className="welcome-row"><div><p className="eyebrow">SEU TEMPO, BEM CUIDADO</p><h1>{isViewingOwnData ? 'Bom dia' : activeUser.full_name || activeUser.email}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{isViewingOwnData ? 'Cada minuto conta. Acompanhe sua jornada.' : `Visualizando os pontos de ${activeUser.full_name || activeUser.email}.`}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
 
     <section className="overview-grid">
       <article className="hero-card">
@@ -368,7 +396,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     </section>
 
     <section className="calendar-section" id="calendar">
-      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>Seu calendário</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
+      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>{isViewingOwnData ? 'Seu calendário' : `Calendário de ${activeUser.full_name || activeUser.email}`}</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
       <div className="spreadsheet-tools">
         <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button><input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
         <form className="period-export" onSubmit={(e) => { e.preventDefault(); exportRange(); }}><label>De <input aria-label="Data inicial do período" type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} required /></label><label>Até <input aria-label="Data final do período" type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} required /></label><button className="tool-button primary" type="submit"><Download size={15} />Exportar período</button></form>
@@ -386,14 +414,13 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
       </div>
     </section>
 
-    <section className="bottom-grid"><article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>Suas horas</h3></div><button className="text-button" onClick={() => document.getElementById('calendar')?.scrollIntoView({ behavior: 'smooth' })}>Ver calendário <ArrowRight size={15} /></button></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
+    <section className="bottom-grid"><article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div><button className="text-button" onClick={() => document.getElementById('calendar')?.scrollIntoView({ behavior: 'smooth' })}>Ver calendário <ArrowRight size={15} /></button></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
       <article className="summary-card"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
     {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
     {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onAdd={(time) => addMark(dateKey(selected), time)} onRemove={(idx) => removeMark(dateKey(selected), idx)} nextMark={nextMark(openDay.marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
-    {adminOpen && isMasterAdmin && <AdminPanel onClose={() => setAdminOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
   </main>;
 }
