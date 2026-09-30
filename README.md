@@ -8,7 +8,7 @@
 4. In Supabase Authentication URL Configuration, set the production Vercel domain as the Site URL. Add `http://localhost:5173/**`, the exact production URL, and your Vercel preview pattern (for example, `https://*-your-team.vercel.app/**`) to Redirect URLs.
 5. In Vercel Project Settings → Environment Variables, add the same URL and publishable key for Preview and Production, then redeploy.
 
-The app uses Supabase Auth for email/password accounts. Attendance records sync to Supabase and are isolated by the signed-in user's ID; existing local records are copied to the account on first load. The account `gaasbrel@gmail.com` also has an admin panel to view, edit, and delete users' attendance records. This access is enforced by database policies and the `admin_list_users()` function. Re-run `supabase/setup.sql` to apply or update these policies and the function.
+The app uses Supabase Auth for email/password accounts. Attendance records sync to Supabase and are isolated by the signed-in user's ID; existing local records are copied to the account on first load. The account `gaasbrel@gmail.com` can select users in the main calendar, view and edit their attendance records, delete an entire month, and export their points. This access is enforced by database policies and the `admin_list_users()` function. Re-run `supabase/setup.sql` to apply or update these policies and the function.
 
 ## Testar uma branch na Vercel
 

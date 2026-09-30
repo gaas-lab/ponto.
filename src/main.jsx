@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload, Trash2 } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
@@ -71,6 +71,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const [sheetMessage, setSheetMessage] = useState('');
   const [sheetError, setSheetError] = useState('');
   const [sheetBusy, setSheetBusy] = useState(false);
+  const [monthDeleteBusy, setMonthDeleteBusy] = useState(false);
   const importInputRef = useRef(null);
 
   useEffect(() => {
@@ -94,6 +95,33 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     setDays({});
     lastDaysRef.current = {};
     setViewingUser(nextUser);
+  }
+
+  async function deleteViewedMonth() {
+    if (!isMasterAdmin || monthDeleteBusy) return;
+    const start = `${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`;
+    const end = dateKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+    const person = activeUser.full_name || activeUser.email;
+    if (!window.confirm(`Apagar todos os pontos de ${person} em ${monthName(month)}? Essa ação não pode ser desfeita.`)) return;
+    setMonthDeleteBusy(true);
+    setSheetError('');
+    setSheetMessage('');
+    setAttendanceLoading(true);
+    try {
+      await syncQueueRef.current;
+      const { error } = await supabase.from('attendance_records').delete().eq('user_id', activeUser.id).gte('work_date', start).lte('work_date', end);
+      if (error) throw error;
+      const remainingDays = Object.fromEntries(Object.entries(days).filter(([date]) => date < start || date > end));
+      lastDaysRef.current = remainingDays;
+      setDays(remainingDays);
+      if (isViewingOwnData) localStorage.setItem(userDaysKey, JSON.stringify(remainingDays));
+      setSheetMessage(`Pontos de ${monthName(month)} apagados para ${person}.`);
+    } catch (error) {
+      setSheetError(error.message || 'Não foi possível apagar os pontos do mês.');
+    } finally {
+      setAttendanceLoading(false);
+      setMonthDeleteBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -398,7 +426,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     <section className="calendar-section" id="calendar">
       <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>{isViewingOwnData ? 'Seu calendário' : `Calendário de ${activeUser.full_name || activeUser.email}`}</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
       <div className="spreadsheet-tools">
-        <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button><input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
+        <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button>{isMasterAdmin && <button className="tool-button danger-button" onClick={deleteViewedMonth} disabled={monthDeleteBusy || attendanceLoading} title={`Apagar todos os pontos de ${monthName(month)} para ${activeUser.full_name || activeUser.email}`}><Trash2 size={14} />{monthDeleteBusy ? 'Apagando…' : 'Apagar mês inteiro'}</button>}<input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
         <form className="period-export" onSubmit={(e) => { e.preventDefault(); exportRange(); }}><label>De <input aria-label="Data inicial do período" type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} required /></label><label>Até <input aria-label="Data final do período" type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} required /></label><button className="tool-button primary" type="submit"><Download size={15} />Exportar período</button></form>
         {(sheetError || sheetMessage) && <p className={`sheet-feedback ${sheetError ? 'error' : ''}`} role="status">{sheetError || sheetMessage}</p>}
       </div>
