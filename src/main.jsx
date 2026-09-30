@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
+import { AdminPanel } from './components/AdminPanel.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
 
@@ -60,6 +61,8 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     catch { return { name: session.user.user_metadata?.full_name || 'Meu perfil', photo: '', photoPath: session.user.user_metadata?.avatar_path || '' }; }
   });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [rangeStart, setRangeStart] = useState(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`);
   const [rangeEnd, setRangeEnd] = useState(dateKey(today));
   const [sheetMessage, setSheetMessage] = useState('');
@@ -349,7 +352,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   return <main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
-      <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span><details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details></div>
+      <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span>{isMasterAdmin && <button className="text-button" onClick={() => setAdminOpen(true)}>Administração</button>}<details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details></div>
     </header>
 
     <section className="welcome-row"><div><p className="eyebrow">SEU TEMPO, BEM CUIDADO</p><h1>Bom dia<span className="greeting-dot">.</span></h1><p className="welcome-sub">Cada minuto conta. Acompanhe sua jornada.</p></div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
@@ -389,6 +392,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onAdd={(time) => addMark(dateKey(selected), time)} onRemove={(idx) => removeMark(dateKey(selected), idx)} nextMark={nextMark(openDay.marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
+    {adminOpen && isMasterAdmin && <AdminPanel onClose={() => setAdminOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
   </main>;
 }
