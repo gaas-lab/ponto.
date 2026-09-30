@@ -253,7 +253,8 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, summary, 'Resumo');
     XLSX.utils.book_append_sheet(workbook, records, 'Registros');
-    XLSX.writeFile(workbook, `Ponto_${startValue}_a_${endValue}.xlsx`);
+    const exportName = (profile.name || session.user.email || 'usuario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+    XLSX.writeFile(workbook, `Ponto_${exportName}_${startValue}_a_${endValue}.xlsx`);
   }
   async function downloadTemplate() {
     const XLSX = await import('xlsx');
