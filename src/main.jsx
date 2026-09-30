@@ -280,17 +280,56 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
       const sheet = workbook.Sheets.Registros || workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error('A planilha não contém uma aba de registros.');
-      const records = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+      const records = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
       const normalize = (s) => String(s).trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const headers = Object.keys(records[0] || {}).reduce((out, key) => ({ ...out, [normalize(key)]: key }), {});
       const dateColumn = headers.data;
       const timeColumns = ['entrada', 'saida para almoco', 'volta do almoco', 'fim do expediente'].map((name) => headers[name]);
       if (!dateColumn || timeColumns.some((col) => !col)) throw new Error('Use o modelo padrão e mantenha os títulos das cinco colunas.');
+      function parseSpreadsheetDate(value) {
+        if (value instanceof Date && !Number.isNaN(value.getTime())) return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          const date = XLSX.SSF.parse_date_code(value);
+          if (date) return `${date.y}-${pad(date.m)}-${pad(date.d)}`;
+        }
+        const text = String(value ?? '').trim();
+        const localDate = text.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})$/);
+        const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/);
+        if (localDate) {
+          const year = Number(localDate[3]) < 100 ? 2000 + Number(localDate[3]) : Number(localDate[3]);
+          return `${year}-${pad(localDate[2])}-${pad(localDate[1])}`;
+        }
+        if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+        return '';
+      }
+      function parseSpreadsheetTime(value, rowNumber) {
+        if (value === '' || value == null) return '';
+        if (typeof value === 'string' && !value.trim()) return '';
+        let hour; let minute;
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+          hour = value.getUTCHours(); minute = value.getUTCMinutes();
+        } else if (typeof value === 'number' && Number.isFinite(value)) {
+          const fraction = ((value % 1) + 1) % 1;
+          const minutes = Math.round(fraction * 1440) % 1440;
+          hour = Math.floor(minutes / 60); minute = minutes % 60;
+        } else {
+          const text = String(value).trim();
+          const match = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+          if (!match) throw new Error(`Horário inválido na linha ${rowNumber}: ${text}.`);
+          hour = Number(match[1]); minute = Number(match[2]);
+          if (match[3]) {
+            if (hour < 1 || hour > 12) throw new Error(`Horário inválido na linha ${rowNumber}: ${text}.`);
+            hour = (hour % 12) + (match[3].toUpperCase() === 'PM' ? 12 : 0);
+          }
+        }
+        if (hour > 23 || minute > 59) throw new Error(`Horário inválido na linha ${rowNumber}.`);
+        return `${pad(hour)}:${pad(minute)}`;
+      }
       const todayKey = dateKey(new Date());
       const parsed = records.filter((row) => row[dateColumn] !== '').map((row, index) => {
         const rawDate = row[dateColumn];
-        let key = '';
-        if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) key = dateKey(rawDate);
+        let key = parseSpreadsheetDate(rawDate);
+        if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) key = parseSpreadsheetDate(rawDate);
         else {
           const value = String(rawDate).trim();
           const localDate = value.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
@@ -300,15 +339,11 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         }
         if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || Number.isNaN(new Date(`${key}T12:00:00`).getTime()) || dateKey(new Date(`${key}T12:00:00`)) !== key) throw new Error(`Data inválida na linha ${index + 2}.`);
         if (key >= todayKey) throw new Error(`A linha ${index + 2} tem data de hoje ou futura. Só é permitido importar dias anteriores a hoje.`);
-        const rawMarks = timeColumns.map((col) => String(row[col] ?? '').trim());
+        const rawMarks = timeColumns.map((col) => row[col] ?? '');
         const firstBlank = rawMarks.indexOf('');
         if (firstBlank >= 0 && rawMarks.slice(firstBlank).some(Boolean)) throw new Error(`Preencha as batidas em sequência na linha ${index + 2}.`);
-        const marks = rawMarks.filter(Boolean).map((time) => {
-          const normalized = time.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-          if (!normalized || Number(normalized[1]) > 23 || Number(normalized[2]) > 59) throw new Error(`Horário inválido na linha ${index + 2}: ${time}.`);
-          return `${pad(normalized[1])}:${normalized[2]}`;
-        });
-        if (marks.length > 4 || marks.some((time, i) => i > 0 && parseTime(time) <= parseTime(marks[i - 1]))) throw new Error(`Confira a ordem das batidas na linha ${index + 2}.`);
+        const marks = rawMarks.map((time) => parseSpreadsheetTime(time, index + 2)).filter(Boolean);
+        if (marks.some((time, i) => i > 0 && parseTime(time) <= parseTime(marks[i - 1]))) throw new Error(`Confira a ordem das batidas na linha ${index + 2}.`);
         return [key, { marks }];
       });
       if (!parsed.length) throw new Error('Não encontrei linhas com datas para importar.');
