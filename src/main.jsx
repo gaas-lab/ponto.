@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Coffee, Download, FileSpreadsheet, Info, LogOut, Moon, Plus, Sun, UserRound, X, Upload, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, Info, LogOut, Moon, Sun, UserRound, X, Upload, Trash2 } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
@@ -15,7 +15,10 @@ const dateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${p
 const parseTime = (s) => s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
 const formatDuration = (mins) => `${Math.floor(mins / 60)}h ${pad(mins % 60)}min`;
 const formatBalanceCompact = (mins) => `${mins >= 0 ? '+' : '−'}${Math.floor(Math.abs(mins) / 60)}h${pad(Math.abs(mins) % 60)}`;
-const minutesToTime = (mins) => `${pad(Math.floor((mins % 1440) / 60))}:${pad(mins % 60)}`;
+const minutesToTime = (mins) => {
+  const normalized = ((mins % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(normalized / 60))}:${pad(normalized % 60)}`;
+};
 const monthName = (d) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(d);
 const dayLong = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
 
@@ -42,6 +45,11 @@ function App() {
 
 function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const today = new Date();
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState(null);
@@ -231,8 +239,10 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     setToast('Batida adicionada');
     window.setTimeout(() => setToast(''), 2200);
   }
-  function removeMark(key, index) {
-    updateDay(key, (record) => ({ ...record, marks: record.marks.filter((_, i) => i !== index) }));
+  function saveMarks(key, marks) {
+    updateDay(key, (record) => ({ ...record, marks }));
+    setToast('Horários salvos');
+    window.setTimeout(() => setToast(''), 2200);
   }
   function markLabel(index) { return ['Entrada', 'Saída para almoço', 'Volta do almoço', 'Fim do expediente'][index] || 'Batida'; }
   function nextMark(marks) { return marks.length < 4 ? markLabel(marks.length) : null; }
@@ -240,6 +250,43 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     if (!marks.length) return null;
     const actualBreak = breakLength(marks);
     return minutesToTime(parseTime(marks[0]) + WORK_MINUTES + (actualBreak ?? BREAK_MINUTES));
+  }
+  function adjustedExit(marks) {
+    const offset = exitOffset(marks);
+    return offset == null ? null : minutesToTime(parseTime(marks[0]) + offset);
+  }
+  function exitOffset(marks) {
+    if (!marks.length) return null;
+    const entryMinutes = parseTime(marks[0]);
+    let normalOffset = parseTime(expectedExit(marks)) - entryMinutes;
+    if (normalOffset < 0) normalOffset += 1440;
+    const balanceBeforeToday = completedMonthEntries
+      .filter(([key]) => key !== dateKey(today))
+      .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+    return normalOffset - balanceBeforeToday;
+  }
+  function minutesUntilExit(marks) {
+    const offset = exitOffset(marks);
+    if (offset == null) return null;
+    const target = new Date(clockNow);
+    target.setHours(Math.floor(parseTime(marks[0]) / 60), parseTime(marks[0]) % 60, 0, 0);
+    target.setMinutes(target.getMinutes() + offset);
+    return Math.floor((target.getTime() - clockNow.getTime()) / 1000);
+  }
+  function formatCountdown(seconds) {
+    const remaining = Math.max(0, seconds);
+    return `${pad(Math.floor(remaining / 3600))}:${pad(Math.floor((remaining % 3600) / 60))}:${pad(remaining % 60)}`;
+  }
+  function markNow() {
+    if (todayMarks.length >= 4) return;
+    const now = new Date();
+    const value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    if (todayMarks.length && parseTime(value) <= parseTime(todayMarks[todayMarks.length - 1])) {
+      setToast('O horário atual precisa ser depois da batida anterior');
+      window.setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    addMark(dateKey(today), value);
   }
   function workedMinutes(marks = []) {
     if (marks.length < 2) return 0;
@@ -435,8 +482,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }
   function changeMonth(delta) { setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1)); }
 
-  const todayNext = nextMark(todayMarks);
   const todayExpected = expectedExit(todayMarks);
+  const todayAdjustedExit = adjustedExit(todayMarks);
+  const exitCountdown = minutesUntilExit(todayMarks);
 
   if (attendanceLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seus pontos…</span></div>;
   if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
@@ -451,7 +499,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     <section className="overview-grid">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
-      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-time">{todayExpected}<span>h</span></div><div className="exit-note">Considerando 1h de almoço</div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div></>}</article>
+      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-estimates"><div><small>Normal</small><strong>{todayExpected}</strong></div><div><small>Com saldo</small><strong>{todayAdjustedExit}</strong></div></div><div className="exit-note">Saldo acumulado: {formatBalanceCompact(monthlyBalance)}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
     </section>
 
     <section className="calendar-section" id="calendar">
@@ -477,36 +525,40 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         <div className="hero-top"><div><div className="hero-label"><span className="live-dot" />JORNADA DE HOJE</div><div className="hero-hours">{formatDuration(workedToday)}<span className="hero-total"> / 8h 48min</span></div></div><div className="ring" style={{ '--progress': `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }}><span>{Math.min(Math.round(workedToday / WORK_MINUTES * 100), 100)}<small>%</small></span></div></div>
         <div className="progress-track"><span style={{ width: `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }} /></div>
         <div className="hero-bottom"><span>{workedToday >= WORK_MINUTES ? 'Jornada completa' : `${formatDuration(Math.max(WORK_MINUTES - workedToday, 0))} restantes`}</span><span>{todayMarks.length}/4 batidas</span></div>
+        <button className="quick-mark-button" onClick={markNow} disabled={todayMarks.length >= 4}><Clock3 size={15} />{todayMarks.length >= 4 ? 'Dia completo' : `Registrar ${nextMark(todayMarks)?.toLowerCase()} agora`}</button>
       </article>
       <article className="summary-card"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
     {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
-    {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onAdd={(time) => addMark(dateKey(selected), time)} onRemove={(idx) => removeMark(dateKey(selected), idx)} nextMark={nextMark(openDay.marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
+    {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onSaveMarks={(marks) => saveMarks(dateKey(selected), marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
   </main>;
 }
 
-function DayModal({ date, record, holiday, onClose, onAdd, onRemove, nextMark, expected, worked, breakLength }) {
-  const [time, setTime] = useState('');
+function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worked, breakLength }) {
   const [error, setError] = useState('');
   const marks = record.marks || [];
-  const currentLabel = nextMark || 'Todas as batidas registradas';
+  const [times, setTimes] = useState(() => Array.from({ length: 4 }, (_, index) => marks[index] || ''));
   function submit(e) {
     e.preventDefault(); setError('');
-    if (!time) return setError('Escolha um horário para a batida.');
-    const value = parseTime(time);
-    if (marks.length && value <= parseTime(marks[marks.length - 1])) return setError('O horário precisa ser depois da batida anterior.');
-    onAdd(time); setTime('');
+    if (times.some((time, index) => !time && times.slice(index + 1).some(Boolean))) return setError('Preencha os horários em sequência, sem pular uma batida.');
+    const normalizedMarks = times.map((time) => time.trim()).filter(Boolean);
+    if (normalizedMarks.some((time) => !/^\d{2}:\d{2}$/.test(time))) return setError('Confira os horários preenchidos.');
+    if (normalizedMarks.some((time, index) => index > 0 && parseTime(time) <= parseTime(normalizedMarks[index - 1]))) return setError('Os horários precisam estar em ordem crescente.');
+    onSaveMarks(normalizedMarks);
   }
-  const typeIcons = [<Clock3 size={17} />, <Coffee size={17} />, <Coffee size={17} />, <Check size={17} />];
+  function clearFrom(index) {
+    setTimes((current) => current.map((time, position) => position >= index ? '' : time));
+    setError('');
+  }
   return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="day-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-top"><div><p className="eyebrow">REGISTRO DO DIA</p><h2 id="modal-title">{dayLong(date)}</h2></div><button className="icon-button close-button" onClick={onClose} aria-label="Fechar"><X size={19} /></button></div>
     {holiday && <div className="holiday-banner"><CalendarDays size={15} />{holiday}</div>}
     <div className="modal-progress"><div><span>Jornada registrada</span><strong>{formatDuration(worked)} <small>/ 8h 48min</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / WORK_MINUTES, 1) * 100}%` }} /></div></div>
     {expected && <div className="expected-banner"><span className="expected-icon"><Clock3 size={16} /></span><div><small>PREVISÃO DE SAÍDA</small><strong>{expected}<span>h</span></strong></div><span className="expected-caption">Entrada + jornada<br />+ 1h de almoço</span></div>}
-    <div className="modal-timeline">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Fim do expediente'].map((label, i) => <div className={`mark-row ${marks[i] ? 'has-mark' : ''}`} key={label}><span className={`mark-icon ${marks[i] ? 'done' : ''}`}>{typeIcons[i]}</span><div className="mark-copy"><strong>{label}</strong>{i === 1 && <small>Início do intervalo</small>}{i === 2 && <small>{breakLength != null ? `Intervalo: ${formatDuration(breakLength)}` : 'Retorno do almoço'}</small>}</div>{marks[i] ? <><span className="mark-time">{marks[i]}</span><button className="remove-mark" onClick={() => onRemove(i)} aria-label={`Remover ${label}`}><X size={14} /></button></> : <span className="pending-label">Pendente</span>}</div>)}</div>
-    {nextMark ? <form className="add-mark-form" onSubmit={submit}><div className="form-label-row"><label htmlFor="mark-time">Adicionar batida</label><span>Próxima: <b>{currentLabel}</b></span></div><div className="input-row"><input id="mark-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required /><button className="add-button" type="submit"><Plus size={17} />Adicionar</button></div>{error && <p className="form-error">{error}</p>}{marks.length === 2 && <p className="form-hint"><Info size={13} />O almoço pode durar 1 hora ou mais; a previsão de saída será ajustada.</p>}</form> : <div className={`balance-banner ${worked >= WORK_MINUTES ? 'positive' : 'negative'}`}><div className="balance-icon">{worked >= WORK_MINUTES ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO DO DIA</small><strong>{worked >= WORK_MINUTES ? '+' : '−'}{formatDuration(Math.abs(worked - WORK_MINUTES))}</strong><span>{worked >= WORK_MINUTES ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div>}
+    <form className="batch-marks-form" onSubmit={submit}><div className="batch-marks-heading"><strong>Horários do dia</strong><span>Preencha as batidas que já aconteceram</span></div><div className="batch-mark-list">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Saída'].map((label, index) => <div className="batch-mark-row" key={label}><label className="batch-mark-field"><span>{label}</span><input aria-label={label} type="time" value={times[index]} onChange={(event) => setTimes((current) => current.map((value, position) => position === index ? event.target.value : value))} /></label><button className="clear-mark-button" type="button" onClick={() => clearFrom(index)} disabled={!times[index]} aria-label={`Apagar ${label}`} title={index < 3 ? 'Apagar este horário e os seguintes' : `Apagar ${label}`}><X size={15} /></button></div>)}</div>{error && <p className="form-error">{error}</p>}<p className="form-hint"><Info size={13} />Deixe em branco os horários que ainda não aconteceram. Apagar uma batida também limpa as seguintes.</p><button className="add-button batch-save-button" type="submit">Salvar horários</button></form>
+    {marks.length === 4 && <div className={`balance-banner ${worked >= WORK_MINUTES ? 'positive' : 'negative'}`}><div className="balance-icon">{worked >= WORK_MINUTES ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO DO DIA</small><strong>{worked >= WORK_MINUTES ? '+' : '−'}{formatDuration(Math.abs(worked - WORK_MINUTES))}</strong><span>{worked >= WORK_MINUTES ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div>}
     <div className="modal-actions"><button className="done-button" onClick={onClose}>Concluir</button></div></section></div>;
 }
 
