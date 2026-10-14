@@ -47,7 +47,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const today = new Date();
   const [clockNow, setClockNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = window.setInterval(() => setClockNow(new Date()), 30_000);
+    const timer = window.setInterval(() => setClockNow(new Date()), 1_000);
     return () => window.clearInterval(timer);
   }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
@@ -252,20 +252,30 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     return minutesToTime(parseTime(marks[0]) + WORK_MINUTES + (actualBreak ?? BREAK_MINUTES));
   }
   function adjustedExit(marks) {
-    const normalExit = expectedExit(marks);
+    const offset = exitOffset(marks);
+    return offset == null ? null : minutesToTime(parseTime(marks[0]) + offset);
+  }
+  function exitOffset(marks) {
+    if (!marks.length) return null;
+    const entryMinutes = parseTime(marks[0]);
+    let normalOffset = parseTime(expectedExit(marks)) - entryMinutes;
+    if (normalOffset < 0) normalOffset += 1440;
     const balanceBeforeToday = completedMonthEntries
       .filter(([key]) => key !== dateKey(today))
       .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
-    return normalExit ? minutesToTime(parseTime(normalExit) - balanceBeforeToday) : null;
+    return normalOffset - balanceBeforeToday;
   }
-  function minutesUntilExit(exitTime, marks) {
-    if (!exitTime || !marks[0]) return null;
-    const entryMinutes = parseTime(marks[0]);
-    const currentMinutes = clockNow.getHours() * 60 + clockNow.getMinutes();
-    const currentOffset = currentMinutes < entryMinutes ? 1440 : 0;
-    let targetMinutes = parseTime(exitTime);
-    if (targetMinutes < entryMinutes) targetMinutes += 1440;
-    return targetMinutes - (currentMinutes + currentOffset);
+  function minutesUntilExit(marks) {
+    const offset = exitOffset(marks);
+    if (offset == null) return null;
+    const target = new Date(clockNow);
+    target.setHours(Math.floor(parseTime(marks[0]) / 60), parseTime(marks[0]) % 60, 0, 0);
+    target.setMinutes(target.getMinutes() + offset);
+    return Math.floor((target.getTime() - clockNow.getTime()) / 1000);
+  }
+  function formatCountdown(seconds) {
+    const remaining = Math.max(0, seconds);
+    return `${pad(Math.floor(remaining / 3600))}:${pad(Math.floor((remaining % 3600) / 60))}:${pad(remaining % 60)}`;
   }
   function markNow() {
     if (todayMarks.length >= 4) return;
@@ -439,7 +449,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
   const todayExpected = expectedExit(todayMarks);
   const todayAdjustedExit = adjustedExit(todayMarks);
-  const exitCountdown = minutesUntilExit(todayAdjustedExit, todayMarks);
+  const exitCountdown = minutesUntilExit(todayMarks);
 
   if (attendanceLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seus pontos…</span></div>;
   if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
@@ -454,7 +464,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     <section className="overview-grid">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
-      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-estimates"><div><small>Normal</small><strong>{todayExpected}</strong></div><div><small>Com saldo</small><strong>{todayAdjustedExit}</strong></div></div><div className="exit-note">Saldo acumulado: {formatBalanceCompact(monthlyBalance)}</div>{exitCountdown != null && <div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatDuration(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>para sair</small></div>}</> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div></>}</article>
+      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-estimates"><div><small>Normal</small><strong>{todayExpected}</strong></div><div><small>Com saldo</small><strong>{todayAdjustedExit}</strong></div></div><div className="exit-note">Saldo acumulado: {formatBalanceCompact(monthlyBalance)}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
     </section>
 
     <section className="calendar-section" id="calendar">
