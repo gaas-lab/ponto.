@@ -15,7 +15,10 @@ const dateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${p
 const parseTime = (s) => s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
 const formatDuration = (mins) => `${Math.floor(mins / 60)}h ${pad(mins % 60)}min`;
 const formatBalanceCompact = (mins) => `${mins >= 0 ? '+' : '−'}${Math.floor(Math.abs(mins) / 60)}h${pad(Math.abs(mins) % 60)}`;
-const minutesToTime = (mins) => `${pad(Math.floor((mins % 1440) / 60))}:${pad(mins % 60)}`;
+const minutesToTime = (mins) => {
+  const normalized = ((mins % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(normalized / 60))}:${pad(normalized % 60)}`;
+};
 const monthName = (d) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(d);
 const dayLong = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
 
@@ -241,6 +244,24 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const actualBreak = breakLength(marks);
     return minutesToTime(parseTime(marks[0]) + WORK_MINUTES + (actualBreak ?? BREAK_MINUTES));
   }
+  function adjustedExit(marks) {
+    const normalExit = expectedExit(marks);
+    const balanceBeforeToday = completedMonthEntries
+      .filter(([key]) => key !== dateKey(today))
+      .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+    return normalExit ? minutesToTime(parseTime(normalExit) - balanceBeforeToday) : null;
+  }
+  function markNow() {
+    if (todayMarks.length >= 4) return;
+    const now = new Date();
+    const value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    if (todayMarks.length && parseTime(value) <= parseTime(todayMarks[todayMarks.length - 1])) {
+      setToast('O horário atual precisa ser depois da batida anterior');
+      window.setTimeout(() => setToast(''), 2500);
+      return;
+    }
+    addMark(dateKey(today), value);
+  }
   function workedMinutes(marks = []) {
     if (marks.length < 2) return 0;
     let total = 0;
@@ -416,7 +437,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     <section className="overview-grid">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
-      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-time">{todayExpected}<span>h</span></div><div className="exit-note">Considerando 1h de almoço</div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div></>}</article>
+      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-estimates"><div><small>Normal</small><strong>{todayExpected}</strong></div><div><small>Com saldo</small><strong>{adjustedExit(todayMarks)}</strong></div></div><div className="exit-note">Saldo acumulado: {formatBalanceCompact(monthlyBalance)}</div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div></>}</article>
     </section>
 
     <section className="calendar-section" id="calendar">
@@ -442,6 +463,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         <div className="hero-top"><div><div className="hero-label"><span className="live-dot" />JORNADA DE HOJE</div><div className="hero-hours">{formatDuration(workedToday)}<span className="hero-total"> / 8h 48min</span></div></div><div className="ring" style={{ '--progress': `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }}><span>{Math.min(Math.round(workedToday / WORK_MINUTES * 100), 100)}<small>%</small></span></div></div>
         <div className="progress-track"><span style={{ width: `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }} /></div>
         <div className="hero-bottom"><span>{workedToday >= WORK_MINUTES ? 'Jornada completa' : `${formatDuration(Math.max(WORK_MINUTES - workedToday, 0))} restantes`}</span><span>{todayMarks.length}/4 batidas</span></div>
+        <button className="quick-mark-button" onClick={markNow} disabled={todayMarks.length >= 4}><Clock3 size={15} />{todayMarks.length >= 4 ? 'Dia completo' : `Registrar ${nextMark(todayMarks)?.toLowerCase()} agora`}</button>
       </article>
       <article className="summary-card"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
