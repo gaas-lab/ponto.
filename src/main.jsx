@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, Info, LogOut, Moon, Sun, UserRound, X, Upload, Trash2 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
@@ -562,4 +563,9 @@ function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worke
     <div className="modal-actions"><button className="done-button" onClick={onClose}>Concluir</button></div></section></div>;
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(
+  <>
+    <App />
+    <Analytics />
+  </>
+);
