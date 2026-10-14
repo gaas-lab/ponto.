@@ -233,7 +233,7 @@ Este projeto foi desenvolvido para fins de estudo, produtividade e experimentaç
 
 ## 👨‍💻 Desenvolvido por
 
-**Gabriel ROcha**
+**Gabriel Rocha**
 
 Projeto desenvolvido utilizando:
 
