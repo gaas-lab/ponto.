@@ -10,6 +10,8 @@ const BREAK_MINUTES = 60;
 const KEY = 'ponto-days-v1';
 const PROFILE_KEY = 'ponto-profile-v1';
 const THEME_KEY = 'ponto-theme-v1';
+const CALENDAR_VIEW_KEY = 'ponto-calendar-view-v1';
+const EXIT_BALANCE_KEY = 'ponto-exit-balance-v1';
 const pad = (n) => String(n).padStart(2, '0');
 const dateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 const parseTime = (s) => s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
@@ -52,6 +54,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [calendarView, setCalendarView] = useState(() => localStorage.getItem(CALENDAR_VIEW_KEY) || 'month');
+  const [calendarFocus, setCalendarFocus] = useState(today);
+  const [useBalanceForExit, setUseBalanceForExit] = useState(() => localStorage.getItem(EXIT_BALANCE_KEY) !== 'false');
   const [selected, setSelected] = useState(null);
   const [viewingUser, setViewingUser] = useState({ id: session.user.id, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Meus pontos' });
   const [adminUsers, setAdminUsers] = useState([]);
@@ -81,6 +86,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const [sheetBusy, setSheetBusy] = useState(false);
   const [monthDeleteBusy, setMonthDeleteBusy] = useState(false);
   const importInputRef = useRef(null);
+
+  useEffect(() => localStorage.setItem(CALENDAR_VIEW_KEY, calendarView), [calendarView]);
+  useEffect(() => localStorage.setItem(EXIT_BALANCE_KEY, String(useBalanceForExit)), [useBalanceForExit]);
 
   useEffect(() => {
     if (!isMasterAdmin) return;
@@ -212,12 +220,18 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }, [month.getFullYear()]);
 
   const calendarDays = useMemo(() => {
+    if (calendarView === 'day') return [new Date(calendarFocus)];
+    if (calendarView === 'week') {
+      const start = new Date(calendarFocus);
+      start.setDate(start.getDate() - start.getDay());
+      return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+    }
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
     const startOffset = first.getDay();
     const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
     const cells = Math.ceil((startOffset + count) / 7) * 7;
     return Array.from({ length: cells }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i - startOffset + 1));
-  }, [month]);
+  }, [month, calendarView, calendarFocus]);
 
   const monthEntries = Object.entries(days).filter(([key, record]) => key.startsWith(`${month.getFullYear()}-${pad(month.getMonth() + 1)}`) && record.marks?.length);
   const totalWorked = monthEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks), 0);
@@ -260,9 +274,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const entryMinutes = parseTime(marks[0]);
     let normalOffset = parseTime(expectedExit(marks)) - entryMinutes;
     if (normalOffset < 0) normalOffset += 1440;
-    const balanceBeforeToday = completedMonthEntries
+    const balanceBeforeToday = useBalanceForExit ? completedMonthEntries
       .filter(([key]) => key !== dateKey(today))
-      .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+      .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0) : 0;
     return normalOffset - balanceBeforeToday;
   }
   function minutesUntilExit(marks) {
@@ -480,7 +494,19 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     setToast('Perfil atualizado');
     window.setTimeout(() => setToast(''), 2200);
   }
-  function changeMonth(delta) { setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1)); }
+  function changePeriod(delta) {
+    const next = new Date(calendarFocus);
+    if (calendarView === 'month') next.setMonth(next.getMonth() + delta, 1);
+    else if (calendarView === 'week') next.setDate(next.getDate() + delta * 7);
+    else next.setDate(next.getDate() + delta);
+    setCalendarFocus(next);
+    setMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+  }
+  function changeCalendarView(view) {
+    setCalendarView(view);
+    if (view !== 'month') setCalendarFocus(selected || today);
+  }
+  const calendarTitle = calendarView === 'month' ? monthName(month) : calendarView === 'day' ? dayLong(calendarFocus) : `${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(calendarDays[0])} – ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' }).format(calendarDays[6])}`;
 
   const todayExpected = expectedExit(todayMarks);
   const todayAdjustedExit = adjustedExit(todayMarks);
@@ -499,21 +525,22 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     <section className="overview-grid">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
-      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div>{todayExpected ? <><div className="exit-estimates"><div><small>Normal</small><strong>{todayExpected}</strong></div><div><small>Com saldo</small><strong>{todayAdjustedExit}</strong></div></div><div className="exit-note">Saldo acumulado: {formatBalanceCompact(monthlyBalance)}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
+      <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div><label className="exit-balance-toggle"><input type="checkbox" checked={useBalanceForExit} onChange={(event) => setUseBalanceForExit(event.target.checked)} />Usar saldo de horas</label>{todayExpected ? <><div className="exit-estimates"><div><small>{useBalanceForExit ? 'Com saldo' : 'Prevista'}</small><strong>{useBalanceForExit ? todayAdjustedExit : todayExpected}</strong></div></div><div className="exit-note">{useBalanceForExit ? `Saldo acumulado: ${formatBalanceCompact(monthlyBalance)}` : 'Considerando apenas a jornada de hoje'}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
     </section>
 
     <section className="calendar-section" id="calendar">
-      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>{isViewingOwnData ? 'Seu calendário' : `Calendário de ${activeUser.full_name || activeUser.email}`}</h2></div><div className="month-controls"><button className="icon-button" onClick={() => changeMonth(-1)} aria-label="Mês anterior"><ArrowLeft size={17} /></button><span className="month-title">{monthName(month)}</span><button className="icon-button" onClick={() => changeMonth(1)} aria-label="Próximo mês"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
+      <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>{isViewingOwnData ? 'Seu calendário' : `Calendário de ${activeUser.full_name || activeUser.email}`}</h2></div><div className="month-controls"><div className="calendar-view-picker" role="group" aria-label="Visualização do calendário">{[['month','Mês'],['week','Semana'],['day','Dia']].map(([view,label]) => <button key={view} className={calendarView === view ? 'active' : ''} onClick={() => changeCalendarView(view)} aria-pressed={calendarView === view}>{label}</button>)}</div><button className="icon-button" onClick={() => changePeriod(-1)} aria-label="Período anterior"><ArrowLeft size={17} /></button><span className="month-title">{calendarTitle}</span><button className="icon-button" onClick={() => changePeriod(1)} aria-label="Próximo período"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
       <div className="spreadsheet-tools">
         <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button>{isMasterAdmin && <button className="tool-button danger-button" onClick={deleteViewedMonth} disabled={monthDeleteBusy || attendanceLoading} title={`Apagar todos os pontos de ${monthName(month)} para ${activeUser.full_name || activeUser.email}`}><Trash2 size={14} />{monthDeleteBusy ? 'Apagando…' : 'Apagar mês inteiro'}</button>}<input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
         <form className="period-export" onSubmit={(e) => { e.preventDefault(); exportRange(); }}><label>De <input aria-label="Data inicial do período" type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} required /></label><label>Até <input aria-label="Data final do período" type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} required /></label><button className="tool-button primary" type="submit"><Download size={15} />Exportar período</button></form>
         {(sheetError || sheetMessage) && <p className={`sheet-feedback ${sheetError ? 'error' : ''}`} role="status">{sheetError || sheetMessage}</p>}
       </div>
-      <div className="calendar-card">
-        <div className="weekdays">{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => <div key={d}>{d}</div>)}</div>
+      <div className={`calendar-card calendar-view-${calendarView}`}>
+        {calendarView !== 'day' && <div className="weekdays">{(calendarView === 'week' ? calendarDays : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']).map((d) => <div key={typeof d === 'string' ? d : dateKey(d)}>{typeof d === 'string' ? d : new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric' }).format(d)}</div>)}</div>}
         <div className="calendar-grid">{calendarDays.map((day, idx) => {
-          const key = dateKey(day); const inMonth = day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const holiday = holidays[key];
-          return <button key={`${key}-${idx}`} className={`day-cell ${inMonth ? '' : 'outside'} ${isToday ? 'is-today' : ''} ${holiday ? 'is-holiday' : ''}`} onClick={() => setSelected(day)} aria-label={`${dayLong(day)}${holiday ? `, feriado ${holiday}` : ''}`}>
+          const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const holiday = holidays[key];
+          if (calendarView === 'day') return <DayViewCard key={key} date={day} marks={marks} holiday={holiday} onSave={(nextMarks) => saveMarks(key, nextMarks)} workedMinutes={workedMinutes} expectedExit={expectedExit} onRegisterNow={(nextMarks) => saveMarks(key, nextMarks)} />;
+          return <button key={`${key}-${idx}`} className={`day-cell ${inMonth ? '' : 'outside'} ${isToday ? 'is-today' : ''} ${holiday ? 'is-holiday' : ''}`} onClick={() => { setCalendarFocus(day); if (calendarView === 'month') setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); setSelected(day); }} aria-label={`${dayLong(day)}${holiday ? `, feriado ${holiday}` : ''}`}>
             <span className="day-number">{day.getDate()}</span>{holiday && <span className="holiday-dot" />}{completed ? <span className={`day-status day-balance ${balance >= 0 ? 'complete' : 'shortfall'}`} title={`Saldo: ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))}`}><i />{formatBalanceCompact(balance)}</span> : marks.length ? <span className="day-status"><i />{progress ? formatDuration(progress) : 'Em andamento'}</span> : <span className="day-empty">{holiday ? 'Feriado' : ' '}</span>}
           </button>;
         })}</div>
@@ -535,6 +562,63 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
   </main>;
+}
+
+function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit, onRegisterNow }) {
+  const key = dateKey(date);
+  const today = key === dateKey(new Date());
+  const [times, setTimes] = useState(() => Array.from({ length: 4 }, (_, index) => marks[index] || ''));
+  const [error, setError] = useState('');
+  useEffect(() => {
+    setTimes(Array.from({ length: 4 }, (_, index) => marks[index] || ''));
+    setError('');
+  }, [key, marks.join('|')]);
+  const filled = times.filter(Boolean);
+  const worked = workedMinutes(filled);
+  const remaining = Math.max(WORK_MINUTES - worked, 0);
+  const expected = expectedExit(filled);
+  function validate(candidate) {
+    if (candidate.some((time, index) => !time && candidate.slice(index + 1).some(Boolean))) return 'Preencha os horários em sequência, sem pular uma batida.';
+    if (candidate.some((time, index) => time && !/^\d{2}:\d{2}$/.test(time))) return 'Confira os horários preenchidos.';
+    if (candidate.some((time, index) => index > 0 && time && candidate[index - 1] && parseTime(time) <= parseTime(candidate[index - 1]))) return 'Os horários precisam estar em ordem crescente.';
+    return '';
+  }
+  function save(candidate = times) {
+    const validationError = validate(candidate);
+    if (validationError) { setError(validationError); return false; }
+    onSave(candidate.filter(Boolean));
+    setError('');
+    return true;
+  }
+  function registerNow() {
+    const nextIndex = times.findIndex((time) => !time);
+    if (nextIndex < 0) return;
+    const now = new Date();
+    const currentTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const candidate = [...times];
+    candidate[nextIndex] = currentTime;
+    const validationError = validate(candidate);
+    if (validationError) { setError(validationError); return; }
+    setTimes(candidate);
+    onRegisterNow(candidate.filter(Boolean));
+    setError('');
+  }
+  function clearFrom(index) {
+    const candidate = times.map((time, position) => position >= index ? '' : time);
+    setTimes(candidate);
+    setError('');
+  }
+  return <article className={`day-detail ${today ? 'is-today' : ''}`}>
+    <div className="day-detail-heading">
+      <div><p className="eyebrow">REGISTRO DO DIA</p><h3>{dayLong(date)}</h3></div>
+      <span className="day-detail-count">{times.filter(Boolean).length}/4 batidas</span>
+    </div>
+    {holiday && <div className="holiday-banner"><CalendarDays size={15} />{holiday}</div>}
+    <div className="day-detail-progress"><div><span>Horas trabalhadas</span><strong>{formatDuration(worked)} <small>/ 8h 48min</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / WORK_MINUTES, 1) * 100}%` }} /></div></div>
+    <div className="day-detail-marks">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Saída'].map((label, index) => <label className="day-detail-mark" key={label}><span className={`day-detail-index ${times[index] ? 'done' : ''}`}>{index + 1}</span><span className="day-detail-label">{label}</span><input type="time" aria-label={label} value={times[index]} onChange={(event) => setTimes((current) => current.map((value, position) => position === index ? event.target.value : value))} /><button type="button" className="clear-mark-button" onClick={() => clearFrom(index)} disabled={!times[index]} aria-label={`Apagar ${label}`} title={index < 3 ? 'Apagar este horário e os seguintes' : `Apagar ${label}`}><X size={15} /></button></label>)}</div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="day-detail-footer"><span>{worked >= WORK_MINUTES ? `Jornada completa · ${formatDuration(Math.max(worked - WORK_MINUTES, 0))} de saldo` : `${formatDuration(remaining)} restantes`}{expected ? ` · Saída prevista ${expected}` : ''}</span><div>{today && times.some(Boolean) && times.filter(Boolean).length < 4 && <button type="button" className="tool-button" onClick={registerNow}><Clock3 size={14} />Registrar {['entrada', 'saída para almoço', 'volta do almoço', 'saída'][times.filter(Boolean).length]} agora</button>}<button type="button" className="tool-button primary" onClick={() => save()}>Salvar batidas</button></div></div>
+  </article>;
 }
 
 function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worked, breakLength }) {
