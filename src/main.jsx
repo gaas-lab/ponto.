@@ -55,7 +55,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [currentPage, setCurrentPage] = useState('clock');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') !== 'false');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') === 'true');
   const [calendarView, setCalendarView] = useState(() => localStorage.getItem(CALENDAR_VIEW_KEY) || 'month');
   const [calendarFocus, setCalendarFocus] = useState(today);
   const [useBalanceForExit, setUseBalanceForExit] = useState(() => localStorage.getItem(EXIT_BALANCE_KEY) !== 'false');
@@ -91,6 +91,13 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
   useEffect(() => localStorage.setItem(CALENDAR_VIEW_KEY, calendarView), [calendarView]);
   useEffect(() => localStorage.setItem(EXIT_BALANCE_KEY, String(useBalanceForExit)), [useBalanceForExit]);
+  useEffect(() => {
+    if (!notificationsEnabled) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      setNotificationsEnabled(false);
+      localStorage.setItem('ponto-notifications-v1', 'false');
+    }
+  }, []);
 
   useEffect(() => {
     if (!isMasterAdmin) return;
@@ -303,6 +310,34 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
       return;
     }
     addMark(dateKey(today), value);
+  }
+  async function changeExitNotification(event) {
+    const enabled = event.target.checked;
+    if (!enabled) {
+      setNotificationsEnabled(false);
+      localStorage.setItem('ponto-notifications-v1', 'false');
+      return;
+    }
+    if (!window.isSecureContext || !('Notification' in window)) {
+      setToast('Este navegador não permite notificações neste endereço.');
+      window.setTimeout(() => setToast(''), 3000);
+      return;
+    }
+    try {
+      const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setToast(permission === 'denied' ? 'Permita notificações nas configurações do navegador.' : 'Permissão para notificações não concedida.');
+        window.setTimeout(() => setToast(''), 3000);
+        return;
+      }
+      setNotificationsEnabled(true);
+      localStorage.setItem('ponto-notifications-v1', 'true');
+      setToast('Aviso de saída ativado: 10 minutos antes.');
+      window.setTimeout(() => setToast(''), 3000);
+    } catch {
+      setToast('Não foi possível ativar as notificações neste navegador.');
+      window.setTimeout(() => setToast(''), 3000);
+    }
   }
   function workedMinutes(marks = []) {
     if (marks.length < 2) return 0;
@@ -545,6 +580,36 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const todayAdjustedExit = adjustedExit(todayMarks);
   const exitCountdown = minutesUntilExit(todayMarks);
 
+  useEffect(() => {
+    if (!notificationsEnabled || attendanceLoading || attendanceError || !isViewingOwnData || !todayMarks.length || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const entry = parseTime(todayMarks[0]);
+    const offset = exitOffset(todayMarks);
+    if (entry == null || offset == null) return;
+    const target = new Date();
+    target.setHours(Math.floor(entry / 60), entry % 60, 0, 0);
+    target.setMinutes(target.getMinutes() + offset);
+    const now = Date.now();
+    if (target.getTime() <= now) return;
+    const reminderAt = target.getTime() - 10 * 60 * 1000;
+    const targetLabel = minutesToTime(target.getHours() * 60 + target.getMinutes());
+    const reminderKey = `ponto-exit-notified:${session.user.id}:${dateKey(today)}:${targetLabel}`;
+    if (localStorage.getItem(reminderKey) === 'true') return;
+    const timer = window.setTimeout(() => {
+      if (localStorage.getItem(reminderKey) === 'true' || Notification.permission !== 'granted') return;
+      try {
+        new Notification('Sua saída está chegando', {
+          body: `Sua previsão de saída é às ${targetLabel}.`,
+          tag: `ponto-saida-${dateKey(today)}-${targetLabel}`,
+        });
+        localStorage.setItem(reminderKey, 'true');
+      } catch {
+        setToast('Não foi possível mostrar o aviso de saída.');
+        window.setTimeout(() => setToast(''), 3000);
+      }
+    }, Math.max(0, reminderAt - now));
+    return () => window.clearTimeout(timer);
+  }, [notificationsEnabled, attendanceLoading, attendanceError, isViewingOwnData, todayMarks.join('|'), useBalanceForExit, days, activeUser.id, session.user.id]);
+
   if (attendanceLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seus pontos…</span></div>;
   if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
 
@@ -560,7 +625,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         <details className="app-menu"><summary aria-label="Abrir menu principal"><Menu size={17} /><span>Menu</span><ChevronDown size={13} /></summary><nav className="app-menu-dropdown" aria-label="Menu principal">
           {[[Clock3,'Lançamento de horas','clock'],[BarChart3,'Dashboard','dashboard'],[FileText,'Relatório mensal','report'],[History,'Histórico completo','history']].map(([Icon,label,page])=><button type="button" key={page} className={currentPage===page?'active':''} onClick={() => { navTo(page); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Icon size={16} />{label}</button>)}
         </nav></details>
-        <details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><label className="profile-notification-toggle"><Bell size={16}/><span>Notificações</span><span className={`theme-switch ${notificationsEnabled?'on':''}`}/><input type="checkbox" checked={notificationsEnabled} onChange={event=>{setNotificationsEnabled(event.target.checked);localStorage.setItem('ponto-notifications-v1',String(event.target.checked));}} aria-label="Ativar notificações de horário"/></label><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details>
+        <details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><label className="profile-notification-toggle"><Bell size={16}/><span>Aviso da saída · 10 min antes</span><span className={`theme-switch ${notificationsEnabled?'on':''}`}/><input type="checkbox" checked={notificationsEnabled} onChange={changeExitNotification} aria-label="Avisar 10 minutos antes da previsão de saída"/></label><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details>
       </div>
     </header>
 
@@ -601,6 +666,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     {currentPage==='report'&&<section className="monthly-report-section report-page" id="month-report"><div className="section-heading report-heading"><div><p className="eyebrow">FECHAMENTO</p><h2>Relatório de {monthName(month)}</h2></div><button className="tool-button primary" onClick={exportMonthlyPdf}><FileText size={15} />Exportar PDF</button></div>
       <div className="report-table-card"><div className="report-summary-grid"><div><span>Horas trabalhadas</span><strong>{formatDuration(totalWorked)}</strong></div><div><span>Dias completos</span><strong>{workedDays}</strong></div><div><span>Saldo acumulado</span><strong className={monthlyBalance < 0 ? 'negative-text' : ''}>{workedDays ? formatBalanceCompact(monthlyBalance) : '—'}</strong></div><div><span>Batidas registradas</span><strong>{monthEntries.reduce((sum, [, record]) => sum + (record.marks?.length || 0), 0)}</strong></div></div></div>
+      <div className="report-days-card"><div className="report-days-heading"><h3>Horas trabalhadas por dia</h3><span>{monthEntries.length} {monthEntries.length===1?'dia registrado':'dias registrados'}</span></div><div className="report-days-list">{monthEntries.slice().sort(([a],[b])=>a.localeCompare(b)).map(([key,record])=><div className="report-day-row" key={key}><span>{new Intl.DateTimeFormat('pt-BR',{weekday:'short',day:'numeric',month:'short'}).format(new Date(`${key}T12:00:00`))}</span><strong>{formatDuration(workedMinutes(record.marks))}</strong></div>)}</div>{monthEntries.length===0&&<p className="report-days-empty">Nenhuma hora registrada neste mês.</p>}</div>
       <div className="spreadsheet-tools" id="spreadsheet-tools"><div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15}/>Baixar modelo</button><button className="tool-button" onClick={()=>importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15}/>{sheetBusy?'Importando…':'Importar planilha'}</button>{isMasterAdmin&&<button className="tool-button danger-button" onClick={deleteViewedMonth} disabled={monthDeleteBusy||attendanceLoading}><Trash2 size={14}/>{monthDeleteBusy?'Apagando…':'Apagar mês inteiro'}</button>}<input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden/></div>
         <form className="period-export" id="period-export" onSubmit={event=>{event.preventDefault();exportRange();}}><label>De <input aria-label="Data inicial do período" type="date" value={rangeStart} onChange={event=>setRangeStart(event.target.value)} required/></label><label>Até <input aria-label="Data final do período" type="date" value={rangeEnd} onChange={event=>setRangeEnd(event.target.value)} required/></label><button className="tool-button primary" type="submit"><Download size={15}/>Exportar Excel</button></form>
         {(sheetError||sheetMessage)&&<p className={`sheet-feedback ${sheetError?'error':''}`} role="status">{sheetError||sheetMessage}</p>}
