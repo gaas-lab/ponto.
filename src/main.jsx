@@ -54,6 +54,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [currentPage, setCurrentPage] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') !== 'false');
   const [calendarView, setCalendarView] = useState(() => localStorage.getItem(CALENDAR_VIEW_KEY) || 'month');
@@ -325,7 +326,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   async function exportRange(startValue = rangeStart, endValue = rangeEnd) {
     setSheetError('');
     if (!startValue || !endValue || startValue > endValue) return setSheetError('Escolha um período válido, com a data inicial antes da final.');
-    const XLSX = await import('xlsx');
+    const XLSX = await import('./lib/spreadsheet.js');
     const dates = [];
     for (let date = new Date(`${startValue}T12:00:00`); dateKey(date) <= endValue; date.setDate(date.getDate() + 1)) dates.push(new Date(date));
     const rows = dates.map((date) => {
@@ -373,7 +374,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     XLSX.utils.book_append_sheet(workbook, summary, 'Resumo');
     XLSX.utils.book_append_sheet(workbook, records, 'Registros');
     const exportName = ((isViewingOwnData ? profile.name : activeUser.full_name) || activeUser.email || 'usuario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
-    XLSX.writeFile(workbook, `Ponto_${exportName}_${startValue}_a_${endValue}.xlsx`);
+    XLSX.writeFileXLSX(workbook, `Ponto_${exportName}_${startValue}_a_${endValue}.xlsx`);
   }
   function exportMonthlyPdf() {
     const start = `${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`;
@@ -407,7 +408,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }
 
   async function downloadTemplate() {
-    const XLSX = await import('xlsx');
+    const XLSX = await import('./lib/spreadsheet.js');
     const sheet = XLSX.utils.aoa_to_sheet([
       ['Data', 'Entrada', 'Saída para almoço', 'Volta do almoço', 'Fim do expediente'],
     ]);
@@ -422,7 +423,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, 'Registros');
     XLSX.utils.book_append_sheet(workbook, instructions, 'Instruções');
-    XLSX.writeFile(workbook, 'Modelo_importacao_pontos.xlsx');
+    XLSX.writeFileXLSX(workbook, 'Modelo_importacao_pontos.xlsx');
   }
   async function importSpreadsheet(event) {
     const file = event.target.files?.[0];
@@ -430,7 +431,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     if (!file) return;
     setSheetError(''); setSheetMessage(''); setSheetBusy(true);
     try {
-      const XLSX = await import('xlsx');
+      const XLSX = await import('./lib/spreadsheet.js');
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
       const sheet = workbook.Sheets.Registros || workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error('A planilha não contém uma aba de registros.');
@@ -549,41 +550,41 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
 
   const allHistory = Object.entries(days).filter(([, record]) => record.marks?.length).sort(([a], [b]) => b.localeCompare(a));
-  const navTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const navTo = (page) => { setCurrentPage(page); setSelected(null); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   return <div className={`workspace ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}><aside className="sidebar">
     <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span>{!sidebarCollapsed&&<span>Ponto<span className="brand-dot">.</span></span>}</a>
     <div className="sidebar-caption">{!sidebarCollapsed&&'ESPAÇO DE TRABALHO'}</div>
     <nav className="side-nav" aria-label="Menu principal">
-      {[[BarChart3,'Dashboard','dashboard'],[Clock3,'Lançamento de horas','calendar'],[ClipboardList,'Relatório mensal','month-report'],[History,'Histórico completo','history'],[Bell,'Notificações','notifications']].map(([Icon,label,id])=><button key={id} onClick={()=>navTo(id)} title={sidebarCollapsed?label:undefined}><Icon size={18}/>{!sidebarCollapsed&&<span>{label}</span>}{id==='notifications'&&notificationsEnabled&&<i className="nav-indicator"/>}</button>)}
+      {[[BarChart3,'Dashboard','dashboard'],[Clock3,'Lançamento de horas','clock'],[ClipboardList,'Relatório mensal','report'],[History,'Histórico completo','history'],[Bell,'Notificações','notifications']].map(([Icon,label,page])=><button key={page} className={currentPage===page?'active':''} onClick={()=>navTo(page)} title={sidebarCollapsed?label:undefined} aria-current={currentPage===page?'page':undefined}><Icon size={18}/>{!sidebarCollapsed&&<span>{label}</span>}{page==='notifications'&&notificationsEnabled&&<i className="nav-indicator"/>}</button>)}
     </nav><div className="sidebar-spacer"/><button className="sidebar-collapse" onClick={()=>setSidebarCollapsed(value=>!value)} title={sidebarCollapsed?'Expandir menu':'Recolher menu'}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<><PanelLeftClose size={18}/><span>Recolher menu</span></>}</button>
     {!sidebarCollapsed&&<div className="sidebar-footer"><span className="sidebar-avatar">{(profile.name||'P').trim().slice(0,1).toUpperCase()}</span><span><strong>{profile.name||'Meu perfil'}</strong><small>Plano pessoal</small></span></div>}
   </aside><main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
       <details className="app-menu"><summary aria-label="Abrir menu principal"><Menu size={17} /><span>Menu</span><ChevronDown size={13} /></summary><nav className="app-menu-dropdown" aria-label="Menu principal">
-        <a href="#dashboard" onClick={() => document.querySelector('.app-menu')?.removeAttribute('open')}><BarChart3 size={16} />Dashboard</a>
-        <a href="#month-report" onClick={() => document.querySelector('.app-menu')?.removeAttribute('open')}><FileText size={16} />Relatório mensal</a>
-        <a href="#journey-today" onClick={() => document.querySelector('.app-menu')?.removeAttribute('open')}><Clock3 size={16} />Jornada de hoje</a>
-        <a href="#month-summary" onClick={() => document.querySelector('.app-menu')?.removeAttribute('open')}><CalendarDays size={16} />Resumo do mês</a>
+        <button type="button" onClick={() => { navTo('dashboard'); document.querySelector('.app-menu')?.removeAttribute('open'); }}><BarChart3 size={16} />Dashboard</button>
+        <button type="button" onClick={() => { navTo('report'); document.querySelector('.app-menu')?.removeAttribute('open'); }}><FileText size={16} />Relatório mensal</button>
+        <button type="button" onClick={() => { navTo('clock'); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Clock3 size={16} />Jornada de hoje</button>
+        <button type="button" onClick={() => { navTo('clock'); document.querySelector('.app-menu')?.removeAttribute('open'); }}><CalendarDays size={16} />Resumo do mês</button>
         <button onClick={() => { exportMonthlyPdf(); document.querySelector('.app-menu')?.removeAttribute('open'); }}><FileText size={16} />Exportar PDF</button>
         <button onClick={() => { exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`); document.querySelector('.app-menu')?.removeAttribute('open'); }}><FileSpreadsheet size={16} />Exportar Excel</button>
         <button onClick={() => { downloadTemplate(); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Download size={16} />Baixar modelo</button>
         <button onClick={() => { importInputRef.current?.click(); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Upload size={16} />Importar planilha</button>
-        <a href="#period-export" onClick={() => document.querySelector('.app-menu')?.removeAttribute('open')}><Download size={16} />Exportar período</a>
+        <button type="button" onClick={() => { navTo('clock'); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Download size={16} />Exportar período</button>
         {isMasterAdmin && <button className="menu-danger" onClick={() => { deleteViewedMonth(); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Trash2 size={16} />Apagar mês inteiro</button>}
       </nav></details>
       <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span>{isMasterAdmin && <label className="calendar-user-picker"><span>Ver pontos de</span><select value={activeUser.id} onChange={(event) => changeViewedUser(event.target.value)} aria-label="Selecionar usuário para ver os pontos"><option value={session.user.id}>Meus pontos ({profile.name || session.user.email})</option>{adminUsers.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email}</option>)}</select></label>}<details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details></div>
     </header>
 
-    <section className="welcome-row"><div><p className="eyebrow">SEU TEMPO, BEM CUIDADO</p><h1>{isViewingOwnData ? 'Bom dia' : activeUser.full_name || activeUser.email}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{isViewingOwnData ? 'Cada minuto conta. Acompanhe sua jornada.' : `Visualizando os pontos de ${activeUser.full_name || activeUser.email}.`}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
+    <section className="welcome-row"><div><p className="eyebrow">{({dashboard:'VISÃO GERAL',clock:'SEU TEMPO, BEM CUIDADO',report:'ACOMPANHAMENTO',history:'SEUS REGISTROS',notifications:'PREFERÊNCIAS'})[currentPage]}</p><h1>{currentPage==='dashboard'?'Dashboard':currentPage==='clock'?(isViewingOwnData?'Lançamento de horas':activeUser.full_name||activeUser.email):({report:'Relatório mensal',history:'Histórico completo',notifications:'Notificações de horário'})[currentPage]}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{currentPage==='clock'?'Acompanhe sua jornada e registre suas batidas.':currentPage==='dashboard'?'Resumo das suas horas e do seu saldo neste mês.':'Acompanhe sua rotina de trabalho em um só lugar.'}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
 
-    <section className="overview-grid" id="dashboard">
+    {(currentPage==='dashboard'||currentPage==='clock')&&<section className="overview-grid" id="dashboard">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
       <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div><label className="exit-balance-toggle"><input type="checkbox" checked={useBalanceForExit} onChange={(event) => setUseBalanceForExit(event.target.checked)} />Usar saldo de horas</label>{todayExpected ? <><div className="exit-estimates"><div><small>{useBalanceForExit ? 'Com saldo' : 'Prevista'}</small><strong>{useBalanceForExit ? todayAdjustedExit : todayExpected}</strong></div></div><div className="exit-note">{useBalanceForExit ? `Saldo acumulado: ${formatBalanceCompact(monthlyBalance)}` : 'Considerando apenas a jornada de hoje'}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
-    </section>
+    </section>}
 
-    <section className="calendar-section" id="calendar">
+    {currentPage==='clock'&&<section className="calendar-section" id="calendar">
       <div className="section-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>{isViewingOwnData ? 'Seu calendário' : `Calendário de ${activeUser.full_name || activeUser.email}`}</h2></div><div className="month-controls"><div className="calendar-view-picker" role="group" aria-label="Visualização do calendário">{[['month','Mês'],['week','Semana'],['day','Dia']].map(([view,label]) => <button key={view} className={calendarView === view ? 'active' : ''} onClick={() => changeCalendarView(view)} aria-pressed={calendarView === view}>{label}</button>)}</div><button className="icon-button" onClick={() => changePeriod(-1)} aria-label="Período anterior"><ArrowLeft size={17} /></button><span className="month-title">{calendarTitle}</span><button className="icon-button" onClick={() => changePeriod(1)} aria-label="Próximo período"><ArrowRight size={17} /></button><button className="export-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)} aria-label="Exportar este mês para Excel" title="Exportar este mês para Excel"><FileSpreadsheet size={16} /><span>Exportar mês</span><Download size={13} /></button></div></div>
       <div className="spreadsheet-tools" id="spreadsheet-tools">
         <div className="spreadsheet-actions"><button className="tool-button" onClick={downloadTemplate}><FileSpreadsheet size={15} />Baixar modelo</button><button className="tool-button" onClick={() => importInputRef.current?.click()} disabled={sheetBusy}><Upload size={15} />{sheetBusy ? 'Importando…' : 'Importar planilha'}</button>{isMasterAdmin && <button className="tool-button danger-button" onClick={deleteViewedMonth} disabled={monthDeleteBusy || attendanceLoading} title={`Apagar todos os pontos de ${monthName(month)} para ${activeUser.full_name || activeUser.email}`}><Trash2 size={14} />{monthDeleteBusy ? 'Apagando…' : 'Apagar mês inteiro'}</button>}<input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={importSpreadsheet} hidden /></div>
@@ -601,9 +602,9 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         })}</div>
         <div className="calendar-legend"><span><i className="legend-complete" />Jornada completa</span><span><i className="legend-progress" />Em andamento</span>{holidayState === 'loading' ? <span className="holiday-note">Buscando feriados…</span> : holidayState === 'error' ? <span className="holiday-note">Feriados indisponíveis</span> : <span><i className="legend-holiday" />Feriado nacional</span>}</div>
       </div>
-    </section>
+    </section>}
 
-    <section className="monthly-report-section" id="month-report">
+    {(currentPage==='dashboard'||currentPage==='report')&&<section className="monthly-report-section" id="month-report">
       <div className="section-heading report-heading"><div><p className="eyebrow">DASHBOARD</p><h2>Horas por dia</h2></div><button className="tool-button" onClick={exportMonthlyPdf}><FileText size={15} />Exportar PDF</button></div>
       <div className="report-chart-card"><div className="report-chart" role="img" aria-label={`Gráfico de horas trabalhadas por dia em ${monthName(month)}`}>
         {Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, index) => {
@@ -617,17 +618,17 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
       <div className="report-table-card"><div className="card-heading"><div><p className="eyebrow">FECHAMENTO</p><h3>Relatório de {monthName(month)}</h3></div><button className="text-button" onClick={() => exportRange(`${month.getFullYear()}-${pad(month.getMonth() + 1)}-01`, `${month.getFullYear()}-${pad(month.getMonth() + 1)}-${pad(new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate())}`)}><FileSpreadsheet size={14} /> Excel</button></div>
         <div className="report-summary-grid"><div><span>Horas trabalhadas</span><strong>{formatDuration(totalWorked)}</strong></div><div><span>Dias completos</span><strong>{workedDays}</strong></div><div><span>Saldo acumulado</span><strong className={monthlyBalance < 0 ? 'negative-text' : ''}>{workedDays ? formatBalanceCompact(monthlyBalance) : '—'}</strong></div><div><span>Batidas registradas</span><strong>{monthEntries.reduce((sum, [, record]) => sum + (record.marks?.length || 0), 0)}</strong></div></div>
       </div>
-    </section>
+    </section>}
 
-    <section className="bottom-grid"><article className="hero-card" id="journey-today">
+    {currentPage==='clock'&&<section className="bottom-grid"><article className="hero-card" id="journey-today">
         <div className="hero-top"><div><div className="hero-label"><span className="live-dot" />JORNADA DE HOJE</div><div className="hero-hours">{formatDuration(workedToday)}<span className="hero-total"> / 8h 48min</span></div></div><div className="ring" style={{ '--progress': `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }}><span>{Math.min(Math.round(workedToday / WORK_MINUTES * 100), 100)}<small>%</small></span></div></div>
         <div className="progress-track"><span style={{ width: `${Math.min(workedToday / WORK_MINUTES, 1) * 100}%` }} /></div>
         <div className="hero-bottom"><span>{workedToday >= WORK_MINUTES ? 'Jornada completa' : `${formatDuration(Math.max(WORK_MINUTES - workedToday, 0))} restantes`}</span><span>{todayMarks.length}/4 batidas</span></div>
         <button className="quick-mark-button" onClick={markNow} disabled={todayMarks.length >= 4}><Clock3 size={15} />{todayMarks.length >= 4 ? 'Dia completo' : `Registrar ${nextMark(todayMarks)?.toLowerCase()} agora`}</button>
       </article>
-      <article className="summary-card" id="month-summary"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
-    <section className="page-panel history-panel" id="history"><div className="section-heading"><div><p className="eyebrow">SEUS REGISTROS</p><h2>Histórico completo</h2></div><span className="month-title">{allHistory.length} dias registrados</span></div><div className="history-list">{allHistory.length?allHistory.map(([key,record])=><article key={key}><div><strong>{dayLong(new Date(`${key}T12:00:00`))}</strong><small>{record.marks.length===4?'Jornada completa':'Em andamento'}</small></div><span>{record.marks.map((mark,index)=><b key={index}>{['Entrada','Almoço','Retorno','Saída'][index]} <em>{mark}</em></b>)}</span><strong>{formatDuration(workedMinutes(record.marks))}</strong></article>):<p className="empty-history">Seus registros aparecerão aqui.</p>}</div></section>
-    <section className="page-panel settings-panel" id="notifications"><div className="section-heading"><div><p className="eyebrow">PREFERÊNCIAS</p><h2>Notificações de horário</h2></div></div><article className="notification-setting"><div className="notification-icon"><Bell size={19}/></div><div><strong>Lembretes da jornada</strong><p>Ative os lembretes para acompanhar os horários da sua jornada.</p></div><label className="switch-control"><input type="checkbox" checked={notificationsEnabled} onChange={event=>{setNotificationsEnabled(event.target.checked);localStorage.setItem('ponto-notifications-v1',String(event.target.checked));}}/><span/></label></article><p className="settings-note">A preferência fica salva neste dispositivo.</p></section>
+      <article className="summary-card" id="month-summary"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>}
+    {currentPage==='history'&&<section className="page-panel history-panel" id="history"><div className="section-heading"><div><p className="eyebrow">SEUS REGISTROS</p><h2>Histórico completo</h2></div><span className="month-title">{allHistory.length} dias registrados</span></div><div className="history-list">{allHistory.length?allHistory.map(([key,record])=><article key={key}><div><strong>{dayLong(new Date(`${key}T12:00:00`))}</strong><small>{record.marks.length===4?'Jornada completa':'Em andamento'}</small></div><span>{record.marks.map((mark,index)=><b key={index}>{['Entrada','Almoço','Retorno','Saída'][index]} <em>{mark}</em></b>)}</span><strong>{formatDuration(workedMinutes(record.marks))}</strong></article>):<p className="empty-history">Seus registros aparecerão aqui.</p>}</div></section>}
+    {currentPage==='notifications'&&<section className="page-panel settings-panel" id="notifications"><div className="section-heading"><div><p className="eyebrow">PREFERÊNCIAS</p><h2>Notificações de horário</h2></div></div><article className="notification-setting"><div className="notification-icon"><Bell size={19}/></div><div><strong>Lembretes da jornada</strong><p>Ative os lembretes para acompanhar os horários da sua jornada.</p></div><label className="switch-control"><input type="checkbox" checked={notificationsEnabled} onChange={event=>{setNotificationsEnabled(event.target.checked);localStorage.setItem('ponto-notifications-v1',String(event.target.checked));}}/><span/></label></article><p className="settings-note">A preferência fica salva neste dispositivo.</p></section>}
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
     {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
