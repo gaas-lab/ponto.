@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Menu, Moon, Sun, UserRound, X, Upload, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Menu, Moon, Sun, UserRound, X, Upload, Trash2, ClipboardList, History, Bell, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
@@ -54,6 +54,8 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') !== 'false');
   const [calendarView, setCalendarView] = useState(() => localStorage.getItem(CALENDAR_VIEW_KEY) || 'month');
   const [calendarFocus, setCalendarFocus] = useState(today);
   const [useBalanceForExit, setUseBalanceForExit] = useState(() => localStorage.getItem(EXIT_BALANCE_KEY) !== 'false');
@@ -546,7 +548,17 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   if (attendanceLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seus pontos…</span></div>;
   if (attendanceError) return <div className="auth-loading"><span>Não foi possível carregar seus pontos.</span><small>{attendanceError}</small><button className="done-button" onClick={() => window.location.reload()}>Tentar novamente</button></div>;
 
-  return <main className="app-shell">
+  const allHistory = Object.entries(days).filter(([, record]) => record.marks?.length).sort(([a], [b]) => b.localeCompare(a));
+  const navTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  return <div className={`workspace ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}><aside className="sidebar">
+    <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span>{!sidebarCollapsed&&<span>Ponto<span className="brand-dot">.</span></span>}</a>
+    <div className="sidebar-caption">{!sidebarCollapsed&&'ESPAÇO DE TRABALHO'}</div>
+    <nav className="side-nav" aria-label="Menu principal">
+      {[[BarChart3,'Dashboard','dashboard'],[Clock3,'Lançamento de horas','calendar'],[ClipboardList,'Relatório mensal','month-report'],[History,'Histórico completo','history'],[Bell,'Notificações','notifications']].map(([Icon,label,id])=><button key={id} onClick={()=>navTo(id)} title={sidebarCollapsed?label:undefined}><Icon size={18}/>{!sidebarCollapsed&&<span>{label}</span>}{id==='notifications'&&notificationsEnabled&&<i className="nav-indicator"/>}</button>)}
+    </nav><div className="sidebar-spacer"/><button className="sidebar-collapse" onClick={()=>setSidebarCollapsed(value=>!value)} title={sidebarCollapsed?'Expandir menu':'Recolher menu'}>{sidebarCollapsed?<PanelLeftOpen size={18}/>:<><PanelLeftClose size={18}/><span>Recolher menu</span></>}</button>
+    {!sidebarCollapsed&&<div className="sidebar-footer"><span className="sidebar-avatar">{(profile.name||'P').trim().slice(0,1).toUpperCase()}</span><span><strong>{profile.name||'Meu perfil'}</strong><small>Plano pessoal</small></span></div>}
+  </aside><main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
       <details className="app-menu"><summary aria-label="Abrir menu principal"><Menu size={17} /><span>Menu</span><ChevronDown size={13} /></summary><nav className="app-menu-dropdown" aria-label="Menu principal">
@@ -614,13 +626,15 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         <button className="quick-mark-button" onClick={markNow} disabled={todayMarks.length >= 4}><Clock3 size={15} />{todayMarks.length >= 4 ? 'Dia completo' : `Registrar ${nextMark(todayMarks)?.toLowerCase()} agora`}</button>
       </article>
       <article className="summary-card" id="month-summary"><div className="card-heading"><div><p className="eyebrow">RESUMO DO MÊS</p><h3>Seu ritmo</h3></div><span className="summary-calendar"><CalendarDays size={17} /></span></div><div className="summary-stats"><div><strong>{workedDays}<small> dias</small></strong><span>Jornada completa</span></div><div><strong>{formatDuration(totalWorked)}</strong><span>Horas trabalhadas</span></div></div><div className="summary-foot"><Info size={14} /><span>O almoço de 1h não conta como hora trabalhada.</span></div></article></section>
+    <section className="page-panel history-panel" id="history"><div className="section-heading"><div><p className="eyebrow">SEUS REGISTROS</p><h2>Histórico completo</h2></div><span className="month-title">{allHistory.length} dias registrados</span></div><div className="history-list">{allHistory.length?allHistory.map(([key,record])=><article key={key}><div><strong>{dayLong(new Date(`${key}T12:00:00`))}</strong><small>{record.marks.length===4?'Jornada completa':'Em andamento'}</small></div><span>{record.marks.map((mark,index)=><b key={index}>{['Entrada','Almoço','Retorno','Saída'][index]} <em>{mark}</em></b>)}</span><strong>{formatDuration(workedMinutes(record.marks))}</strong></article>):<p className="empty-history">Seus registros aparecerão aqui.</p>}</div></section>
+    <section className="page-panel settings-panel" id="notifications"><div className="section-heading"><div><p className="eyebrow">PREFERÊNCIAS</p><h2>Notificações de horário</h2></div></div><article className="notification-setting"><div className="notification-icon"><Bell size={19}/></div><div><strong>Lembretes da jornada</strong><p>Ative os lembretes para acompanhar os horários da sua jornada.</p></div><label className="switch-control"><input type="checkbox" checked={notificationsEnabled} onChange={event=>{setNotificationsEnabled(event.target.checked);localStorage.setItem('ponto-notifications-v1',String(event.target.checked));}}/><span/></label></article><p className="settings-note">A preferência fica salva neste dispositivo.</p></section>
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
     {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
     {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onSaveMarks={(marks) => saveMarks(dateKey(selected), marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
-  </main>;
+  </main></div>;
 }
 
 function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit, onRegisterNow }) {
