@@ -316,3 +316,7 @@ html[data-theme="dark"] .mini-progress{background:#27272c}
 html[data-theme="dark"] .mini-progress span{background:#3333bd}
 html[data-theme="dark"] .chart-bar{background:#29294f}
 html[data-theme="dark"] .chart-bar.complete{background:#3333bd}
+
+/* The completed-day balance is text; only its status dot gets a blue fill. */
+html[data-theme="dark"] .day-status.day-balance.complete{color:#7777ff;background:transparent}
+html[data-theme="dark"] .day-status.day-balance.complete i{background:#7777ff}
