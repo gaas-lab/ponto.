@@ -192,3 +192,12 @@ html[data-theme="dark"] .app-menu>summary,html[data-theme="dark"] .app-menu-drop
 html[data-theme="dark"] .app-menu-dropdown button{color:#cbd5e1}
 html[data-theme="dark"] .app-menu-dropdown button.active,html[data-theme="dark"] .app-menu-dropdown button:hover{background:#263c57;color:#c8defa}
 html[data-theme="dark"] .footer{color:#8995a3}
+
+/* Header order: wordmark left; date, section menu, account right. */
+.topbar>.brand{position:static;left:auto;transform:none;white-space:nowrap}
+.topbar{justify-content:space-between;gap:16px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:13px;white-space:nowrap}
+.app-menu{flex:0 0 auto}
+.profile-menu{flex:0 0 auto}
+@media(max-width:700px){.topbar{gap:8px}.topbar-right{gap:7px}.today-label{display:block}}
+@media(max-width:420px){.topbar{gap:5px}.topbar-right{gap:5px}.today-label{font-size:10px}.app-menu>summary{gap:4px;padding:7px}.topbar>.brand{gap:7px;font-size:16px}.brand-mark{width:31px;height:31px}}
