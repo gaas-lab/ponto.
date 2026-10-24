@@ -122,3 +122,12 @@ html[data-theme="dark"] .report-summary-grid strong{color:var(--ink)}
 html[data-theme="dark"] .sidebar,html[data-theme="dark"] .page-panel{background:#1a222b;border-color:#29333f}html[data-theme="dark"] .sidebar-caption,html[data-theme="dark"] .sidebar-footer small{color:#95a1b2}html[data-theme="dark"] .sidebar-collapse,html[data-theme="dark"] .sidebar-footer,html[data-theme="dark"] .history-list article{border-color:#2c3643}html[data-theme="dark"] .side-nav button{color:#a8b3c1}html[data-theme="dark"] .history-list strong{color:#e0e7f0}html[data-theme="dark"] .history-list em{color:#cad7e7}
 @media(max-width:760px){.sidebar{width:62px;padding:18px 7px 12px}.sidebar .brand{justify-content:center;padding:0 0 20px}.sidebar-caption,.side-nav button span,.sidebar-collapse span,.sidebar-footer{display:none}.side-nav button,.sidebar-collapse{justify-content:center;padding:0}.app-shell,.sidebar-collapsed .app-shell{margin-left:62px;padding:0 14px 24px}.sidebar-collapsed .sidebar{width:62px}.topbar{height:65px}.history-list article{grid-template-columns:1fr auto}.history-list article>span{grid-column:1/-1;grid-row:2}}
 @media print{.sidebar{display:none!important}.app-shell{margin:0!important;padding:0!important}}
+
+/* Layout: use the top menu as the only section navigation. */
+.app-shell{width:min(100%,1120px);max-width:1120px;margin:0 auto;padding:0 32px 30px}
+.app-menu-dropdown button.active{background:#edf4fc;color:#2867b2;font-weight:700}
+.app-menu-dropdown .nav-indicator{margin-left:auto}
+.dashboard-page .report-chart-card{margin-top:6px}
+.report-page .report-table-card{margin-top:0}
+.report-page .spreadsheet-tools{margin-top:16px}
+@media(max-width:760px){.app-shell{width:100%;max-width:100%;margin:0 auto;padding:0 14px 24px}}
