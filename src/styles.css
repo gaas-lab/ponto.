@@ -301,3 +301,12 @@ html[data-theme="dark"] .auth-submit:hover,html[data-theme="dark"] .tool-button.
 html[data-theme="dark"] .auth-input-wrap,html[data-theme="dark"] .input-row input{background:#111114;border-color:#303036}
 html[data-theme="dark"] .profile-dropdown>button:hover,html[data-theme="dark"] .app-menu-dropdown button:hover{background:#1c1c30;color:#b8b8ff}
 @media(max-width:480px){.brand-mark{border-radius:9px}}
+
+/* Keep hour balance readable on OLED dark surfaces. */
+html[data-theme="dark"] .monthly-balance.positive,html[data-theme="dark"] .monthly-balance.negative,
+html[data-theme="dark"] .balance-banner.positive,html[data-theme="dark"] .balance-banner.negative{background:#111113;border:1px solid #2b2b31;color:#f4f4f5}
+html[data-theme="dark"] .monthly-balance strong,html[data-theme="dark"] .balance-banner strong{color:#fff;opacity:1}
+html[data-theme="dark"] .monthly-balance small,html[data-theme="dark"] .monthly-balance-label,
+html[data-theme="dark"] .balance-banner small,html[data-theme="dark"] .balance-banner>div span,html[data-theme="dark"] .balance-worked{color:#c4c4cc;opacity:1}
+html[data-theme="dark"] .monthly-balance-icon,html[data-theme="dark"] .balance-icon{background:#3333bd;color:#fff}
+html[data-theme="dark"] .balance-icon svg,html[data-theme="dark"] .monthly-balance-icon svg{color:#fff}
