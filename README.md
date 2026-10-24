@@ -209,12 +209,12 @@ A interface foi desenvolvida buscando uma experiência moderna, responsiva e ins
 
 Possíveis melhorias futuras:
 
-* [ ] Dashboard com gráficos de horas
-* [ ] Relatório mensal
-* [ ] Exportação para PDF
-* [ ] Exportação para Excel
-* [ ] Histórico completo de ponto
-* [ ] Notificações de horário
+* [x] Dashboard com gráficos de horas
+* [x] Relatório mensal
+* [x] Exportação para PDF
+* [x] Exportação para Excel
+* [x] Histórico completo de ponto
+* [x] Notificações de horário
 * [ ] PWA para instalação no celular
 * [ ] Modo escuro aprimorado
 * [ ] Gestão de diferentes jornadas
