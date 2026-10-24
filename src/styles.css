@@ -262,3 +262,42 @@ html[data-theme="dark"] .tool-button.primary:hover,html[data-theme="dark"] .auth
 @media(max-width:760px){.app-shell{padding:0 18px 30px}.welcome-row{padding:30px 0 22px}.calendar-card,.recent-card,.summary-card{padding:18px}}
 @media(max-width:480px){.app-shell{padding:0 14px 24px}.topbar{height:68px}.brand-mark{width:34px;height:34px;border-radius:11px}.welcome-row{align-items:flex-start;flex-direction:column;gap:13px;padding:26px 0 19px}.welcome-row h1{font-size:27px}.date-chip{font-size:11px}.hero-card{padding:22px 20px 18px}.exit-card{padding:18px}.calendar-card,.recent-card,.summary-card{padding:15px;border-radius:14px}}
 @media(prefers-reduced-motion:reduce){.tool-button:hover:not(:disabled),.export-button:hover:not(:disabled){transform:none}}
+
+/* Refined icon weight, requested brand blue, and OLED true-black theme. */
+:root{--green:#3333bd;--green-dark:#29299f;--mint:#eeeeff}
+.brand-mark{background:#3333bd;box-shadow:none;border-radius:10px}
+.brand-mark svg,.exit-icon svg,.timeline-icon svg,.summary-calendar svg,.empty-icon svg,.date-chip svg,.section-heading svg,.card-heading svg{width:16px;height:16px;stroke-width:1.55}
+.month-controls .icon-button svg,.icon-button svg{width:16px;height:16px;stroke-width:1.55}
+.profile-dropdown svg,.app-menu svg,.tool-button svg,.export-button svg,.text-button svg{stroke-width:1.55}
+.hero-card{background:linear-gradient(135deg,#3d3dc5 0%,#2b2ba5 100%);border-color:#3333bd;box-shadow:0 10px 24px rgba(51,51,189,.18)}
+.hero-card .ring:before{background:#3333bd}
+.hero-card .ring{background:conic-gradient(#c3c3ff var(--progress),rgba(255,255,255,.2) 0)}
+.hero-card .progress-track span{background:#c3c3ff}
+html[data-theme="dark"]{--ink:#f4f4f5;--muted:#a1a1aa;--line:#242428;--white:#0a0a0b;--soft:#111113;--green:#7777ff;--green-dark:#5a5aeb;--mint:#17172c;--shadow:0 12px 32px rgba(0,0,0,.55);color-scheme:dark}
+html[data-theme="dark"] body,html[data-theme="dark"] .auth-loading{background:#000;color:#f4f4f5}
+html[data-theme="dark"] .topbar{border-color:#202024}
+html[data-theme="dark"] .date-chip,html[data-theme="dark"] .exit-card,html[data-theme="dark"] .calendar-card,html[data-theme="dark"] .recent-card,html[data-theme="dark"] .summary-card,html[data-theme="dark"] .page-panel,html[data-theme="dark"] .report-chart-card,html[data-theme="dark"] .report-table-card{background:#0a0a0b;border-color:#242428;box-shadow:none}
+html[data-theme="dark"] .hero-card{background:linear-gradient(145deg,#19194d,#101035);border-color:#292978;box-shadow:none}
+html[data-theme="dark"] .hero-card .ring:before{background:#14143e}
+html[data-theme="dark"] .hero-card .ring{background:conic-gradient(#7777ff var(--progress),rgba(255,255,255,.14) 0)}
+html[data-theme="dark"] .day-cell{background:#0a0a0b;border-color:#222226}
+html[data-theme="dark"] .day-cell:hover{background:#14141a}
+html[data-theme="dark"] .day-cell.is-today .day-number{background:#3333bd;color:#fff}
+html[data-theme="dark"] .day-status.complete,html[data-theme="dark"] .day-status.complete i,html[data-theme="dark"] .calendar-legend i:not(.legend-progress):not(.legend-holiday){color:#7777ff;background:#7777ff}
+html[data-theme="dark"] .calendar-view-picker{background:#050506;border-color:#27272c}
+html[data-theme="dark"] .calendar-view-picker button.active{background:#20204a;color:#b8b8ff;box-shadow:none}
+html[data-theme="dark"] .month-controls .icon-button,html[data-theme="dark"] .icon-button{background:#101012;border-color:#29292e;color:#c4c4ca}
+html[data-theme="dark"] .month-controls .icon-button:hover,html[data-theme="dark"] .icon-button:hover{background:#18181d;border-color:#4d4d9c;color:#aaaaff}
+html[data-theme="dark"] .summary-calendar,html[data-theme="dark"] .exit-icon,html[data-theme="dark"] .timeline-icon,html[data-theme="dark"] .empty-icon{background:#17172a;color:#a5a5ff}
+html[data-theme="dark"] .profile-dropdown,html[data-theme="dark"] .app-menu-dropdown{background:#0a0a0b;border-color:#29292e;box-shadow:0 18px 44px rgba(0,0,0,.7)}
+html[data-theme="dark"] .day-modal,html[data-theme="dark"] .profile-modal{background:#0a0a0b;border-color:#29292e;box-shadow:0 24px 80px rgba(0,0,0,.75)}
+html[data-theme="dark"] .modal-progress,html[data-theme="dark"] .day-detail-progress{background:#111116}
+html[data-theme="dark"] .auth-shell{background:#000}
+html[data-theme="dark"] .auth-panel{background:#050506}
+html[data-theme="dark"] .auth-card{background:#0a0a0b;border-color:#242428;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+html[data-theme="dark"] .auth-visual{background:#090916}
+html[data-theme="dark"] .auth-submit,html[data-theme="dark"] .tool-button.primary{background:#3333bd;color:#fff}
+html[data-theme="dark"] .auth-submit:hover,html[data-theme="dark"] .tool-button.primary:hover{background:#4141d4}
+html[data-theme="dark"] .auth-input-wrap,html[data-theme="dark"] .input-row input{background:#111114;border-color:#303036}
+html[data-theme="dark"] .profile-dropdown>button:hover,html[data-theme="dark"] .app-menu-dropdown button:hover{background:#1c1c30;color:#b8b8ff}
+@media(max-width:480px){.brand-mark{border-radius:9px}}
