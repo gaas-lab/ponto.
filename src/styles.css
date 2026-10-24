@@ -320,3 +320,12 @@ html[data-theme="dark"] .chart-bar.complete{background:#3333bd}
 /* The completed-day balance is text; only its status dot gets a blue fill. */
 html[data-theme="dark"] .day-status.day-balance.complete{color:#7777ff;background:transparent}
 html[data-theme="dark"] .day-status.day-balance.complete i{background:#7777ff}
+
+/* Negative hour balances remain visibly red in OLED dark mode. */
+html[data-theme="dark"] .monthly-balance.negative,html[data-theme="dark"] .balance-banner.negative{background:#1a0d0e;border-color:#4a2428;color:#ff8585}
+html[data-theme="dark"] .monthly-balance.negative strong,html[data-theme="dark"] .balance-banner.negative strong{color:#ff8585}
+html[data-theme="dark"] .monthly-balance.negative small,html[data-theme="dark"] .monthly-balance.negative .monthly-balance-label,
+html[data-theme="dark"] .balance-banner.negative small,html[data-theme="dark"] .balance-banner.negative>div span,html[data-theme="dark"] .balance-banner.negative .balance-worked{color:#f0a0a0}
+html[data-theme="dark"] .monthly-balance.negative .monthly-balance-icon,html[data-theme="dark"] .balance-banner.negative .balance-icon{background:#9e343d;color:#fff}
+html[data-theme="dark"] .day-status.day-balance.shortfall{color:#ff8585;background:transparent}
+html[data-theme="dark"] .day-status.day-balance.shortfall i{background:#ff6868}
