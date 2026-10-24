@@ -204,3 +204,61 @@ html[data-theme="dark"] .footer{color:#8995a3}
 .report-days-card{margin-top:14px;padding:17px 19px;background:var(--white);border:1px solid var(--line);border-radius:14px}.report-days-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.report-days-heading h3{margin:0;color:var(--ink);font:700 14px Manrope,sans-serif}.report-days-heading>span{color:var(--muted);font-size:10px}.report-days-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));column-gap:22px}.report-day-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:37px;border-bottom:1px solid var(--line);font-size:11px}.report-day-row>span{color:var(--muted);text-transform:capitalize}.report-day-row strong{color:var(--ink);font-size:11px;white-space:nowrap}.report-days-empty{padding:4px 0;margin:0;color:var(--muted);font-size:11px}
 html[data-theme="dark"] .report-days-card{background:#1a222b;border-color:#303b49}html[data-theme="dark"] .report-day-row{border-color:#303b49}html[data-theme="dark"] .report-day-row strong,html[data-theme="dark"] .report-days-heading h3{color:#e0e7f0}
 @media(max-width:480px){.report-days-card{padding:15px}.report-days-list{grid-template-columns:1fr}.report-days-heading{align-items:flex-start;flex-direction:column;gap:5px}}
+
+/* Ponto visual refresh: calmer surfaces, clearer hierarchy and consistent interaction states. */
+:root{--ink:#202b3c;--muted:#64748b;--green:#4f46e5;--green-dark:#4338ca;--mint:#eef2ff;--line:#e2e8f0;--white:#fff;--soft:#f8fafc;--shadow:0 14px 36px rgba(31,41,55,.06)}
+body{background:#f6f7fb;color:var(--ink)}
+.app-shell{max-width:1240px;padding:0 40px 40px}
+.topbar{height:80px;border-color:#e5e9f1}
+.brand{font-size:21px;letter-spacing:-.9px}
+.brand-mark{width:38px;height:38px;border-radius:13px;background:#4f46e5;box-shadow:0 5px 12px rgba(79,70,229,.22)}
+.welcome-row{padding:40px 0 28px}
+.welcome-row h1{font-size:32px;letter-spacing:-1.35px}
+.eyebrow{font-size:10px;letter-spacing:1.2px;color:#64748b}
+.welcome-sub{font-size:14px;color:#64748b}
+.date-chip{min-height:42px;padding:0 14px;border-radius:11px;border-color:#e2e8f0;box-shadow:0 2px 6px rgba(15,23,42,.025);color:#475569}
+.date-chip svg{color:#4f46e5}
+.hero-card{background:linear-gradient(135deg,#5147e8 0%,#4338ca 100%);border-color:#4f46e5;border-radius:18px;padding:27px 30px 22px;box-shadow:0 12px 26px rgba(79,70,229,.16)}
+.hero-card:after{border-color:rgba(255,255,255,.11);box-shadow:0 0 0 32px rgba(255,255,255,.035),0 0 0 64px rgba(255,255,255,.025)}
+.hero-label{font-size:10px;letter-spacing:1.1px;color:#e0e7ff}
+.hero-hours{font-size:30px}
+.hero-card .ring:before{background:#473dd3}
+.exit-card,.calendar-card,.recent-card,.summary-card{border-color:#e4e8f0;border-radius:16px;box-shadow:0 4px 14px rgba(15,23,42,.025)}
+.exit-card{padding:22px 24px}
+.calendar-card,.recent-card,.summary-card{padding:23px}
+.section-heading h2,.card-heading h3{letter-spacing:-.35px}
+.month-controls .icon-button,.icon-button{min-width:38px;min-height:38px;border-color:#e2e8f0;border-radius:10px;transition:background-color .18s,border-color .18s,color .18s,box-shadow .18s}
+.month-controls .icon-button:hover,.icon-button:hover{border-color:#c7d2fe;background:#f5f6ff;color:#4338ca}
+button,a,summary{-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid rgba(99,102,241,.38);outline-offset:2px}
+.calendar-view-picker{border-color:#e2e8f0;background:#f8fafc;padding:4px}
+.calendar-view-picker button{min-height:32px;padding:7px 11px;border-radius:7px;color:#64748b;transition:background-color .18s,color .18s}
+.calendar-view-picker button.active{background:#fff;color:#4338ca;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.day-cell{border-color:#e7ebf2;border-radius:10px;transition:background-color .16s,border-color .16s,box-shadow .16s}
+.day-cell:hover{border-color:#c7d2fe;box-shadow:0 3px 10px rgba(79,70,229,.07)}
+.day-cell.today{box-shadow:inset 0 0 0 1px #6366f1}
+.day-status.complete{color:#4f46e5}
+.day-status.complete i{background:#4f46e5}
+.summary-calendar,.exit-icon,.timeline-icon{border-radius:12px}
+.tool-button,.export-button,.text-button{min-height:40px;border-radius:10px;transition:transform .16s,background-color .18s,border-color .18s,box-shadow .18s}
+.tool-button:hover:not(:disabled),.export-button:hover:not(:disabled){transform:translateY(-1px)}
+.tool-button.primary,.auth-submit{background:#4f46e5}
+.tool-button.primary:hover,.auth-submit:hover{background:#4338ca}
+.footer{padding-top:24px;color:#64748b}
+html[data-theme="dark"]{--ink:#e5eaf1;--muted:#a5b1c2;--line:#303c4e;--white:#182230;--soft:#202c3b;--green:#818cf8;--green-dark:#6366f1;--mint:#252d4b;--shadow:0 14px 36px rgba(0,0,0,.2)}
+html[data-theme="dark"] body{background:#101722;color:#e5eaf1}
+html[data-theme="dark"] .topbar{border-color:#273244}
+html[data-theme="dark"] .date-chip,html[data-theme="dark"] .exit-card,html[data-theme="dark"] .calendar-card,html[data-theme="dark"] .recent-card,html[data-theme="dark"] .summary-card{border-color:#293649;box-shadow:0 4px 14px rgba(0,0,0,.1)}
+html[data-theme="dark"] .hero-card{background:linear-gradient(135deg,#3730a3,#312e81);border-color:#4338ca}
+html[data-theme="dark"] .hero-card .ring:before{background:#35308f}
+html[data-theme="dark"] .calendar-view-picker{background:#111b29;border-color:#303c4e}
+html[data-theme="dark"] .calendar-view-picker button.active{background:#303a62;color:#c7d2fe}
+html[data-theme="dark"] .day-cell.today{box-shadow:inset 0 0 0 1px #818cf8}
+html[data-theme="dark"] .day-status.complete{color:#a5b4fc}
+html[data-theme="dark"] .day-status.complete i{background:#a5b4fc}
+html[data-theme="dark"] .month-controls .icon-button:hover,html[data-theme="dark"] .icon-button:hover{background:#252e4a;border-color:#4f568c;color:#c7d2fe}
+html[data-theme="dark"] .tool-button.primary,html[data-theme="dark"] .auth-submit{background:#4f46e5;color:#fff}
+html[data-theme="dark"] .tool-button.primary:hover,html[data-theme="dark"] .auth-submit:hover{background:#6366f1}
+@media(max-width:760px){.app-shell{padding:0 18px 30px}.welcome-row{padding:30px 0 22px}.calendar-card,.recent-card,.summary-card{padding:18px}}
+@media(max-width:480px){.app-shell{padding:0 14px 24px}.topbar{height:68px}.brand-mark{width:34px;height:34px;border-radius:11px}.welcome-row{align-items:flex-start;flex-direction:column;gap:13px;padding:26px 0 19px}.welcome-row h1{font-size:27px}.date-chip{font-size:11px}.hero-card{padding:22px 20px 18px}.exit-card{padding:18px}.calendar-card,.recent-card,.summary-card{padding:15px;border-radius:14px}}
+@media(prefers-reduced-motion:reduce){.tool-button:hover:not(:disabled),.export-button:hover:not(:disabled){transform:none}}
