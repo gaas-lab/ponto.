@@ -310,3 +310,9 @@ html[data-theme="dark"] .monthly-balance small,html[data-theme="dark"] .monthly-
 html[data-theme="dark"] .balance-banner small,html[data-theme="dark"] .balance-banner>div span,html[data-theme="dark"] .balance-worked{color:#c4c4cc;opacity:1}
 html[data-theme="dark"] .monthly-balance-icon,html[data-theme="dark"] .balance-icon{background:#3333bd;color:#fff}
 html[data-theme="dark"] .balance-icon svg,html[data-theme="dark"] .monthly-balance-icon svg{color:#fff}
+
+/* Dark mode progress bars stay restrained and keep their track distinct. */
+html[data-theme="dark"] .mini-progress{background:#27272c}
+html[data-theme="dark"] .mini-progress span{background:#3333bd}
+html[data-theme="dark"] .chart-bar{background:#29294f}
+html[data-theme="dark"] .chart-bar.complete{background:#3333bd}
