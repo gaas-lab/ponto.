@@ -131,3 +131,64 @@ html[data-theme="dark"] .sidebar,html[data-theme="dark"] .page-panel{background:
 .report-page .report-table-card{margin-top:0}
 .report-page .spreadsheet-tools{margin-top:16px}
 @media(max-width:760px){.app-shell{width:100%;max-width:100%;margin:0 auto;padding:0 14px 24px}}
+
+/* Top navigation: menu on the left, wordmark centered, account controls on the right. */
+.topbar{position:relative;justify-content:space-between}
+.topbar>.brand{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap}
+.app-menu{margin-left:0}
+.topbar-right{margin-left:auto;position:relative;z-index:2}
+.profile-dropdown .profile-notification-toggle{width:100%;min-height:38px;border-radius:8px;padding:9px;display:flex;align-items:center;gap:9px;color:#596676;font-size:11px;cursor:pointer;position:relative}
+.profile-dropdown .profile-notification-toggle:hover{background:#f0f4fa;color:#3569aa}
+.profile-notification-toggle .theme-switch{margin-left:auto;flex:none}
+.profile-notification-toggle input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.history-panel{margin-top:0;padding:26px 28px}
+.history-panel .section-heading{margin-bottom:10px}
+.history-list{margin-top:4px}
+.history-list article{padding:15px 8px}
+@media(max-width:700px){.app-menu{margin-left:0}.topbar>.brand{font-size:18px}.topbar-right{gap:5px}.history-panel{padding:18px 15px}}
+@media(max-width:420px){.today-label{display:none}.topbar>.brand{font-size:17px}.topbar{gap:5px}}
+
+/* Complete dark palette for every app section and shared control. */
+html[data-theme="dark"]{--ink:#e2e9f1;--muted:#9aa8b8;--line:#303b49;--white:#1a222b;--soft:#202a36;--shadow:0 12px 38px rgba(0,0,0,.22);color-scheme:dark}
+html[data-theme="dark"] body{background:#111820;color:#dce4ef}
+html[data-theme="dark"] .topbar{border-color:#29333f}
+html[data-theme="dark"] .brand,html[data-theme="dark"] .welcome-row h1,html[data-theme="dark"] .section-heading h2,html[data-theme="dark"] .card-heading h3{color:#e5eaf1}
+html[data-theme="dark"] .today-label,html[data-theme="dark"] .welcome-sub,html[data-theme="dark"] .eyebrow,html[data-theme="dark"] .exit-label,html[data-theme="dark"] .exit-note,html[data-theme="dark"] .calendar-user-picker{color:#95a1b2}
+html[data-theme="dark"] .date-chip,html[data-theme="dark"] .exit-card,html[data-theme="dark"] .calendar-card,html[data-theme="dark"] .recent-card,html[data-theme="dark"] .summary-card,html[data-theme="dark"] .page-panel,html[data-theme="dark"] .report-chart-card,html[data-theme="dark"] .report-table-card{background:#1a222b;border-color:#29333f;color:#dce4ef}
+html[data-theme="dark"] .date-chip{color:#bac8d8}
+html[data-theme="dark"] .exit-time,html[data-theme="dark"] .exit-estimates strong,html[data-theme="dark"] .day-detail-heading h3,html[data-theme="dark"] .day-number,html[data-theme="dark"] .recent-name,html[data-theme="dark"] .mark-copy strong,html[data-theme="dark"] .report-summary-grid strong{color:#e0e7f0}
+html[data-theme="dark"] .month-title{color:#c5d0dd}
+html[data-theme="dark"] .month-controls .icon-button,html[data-theme="dark"] .icon-button{background:#202b39;border-color:#303b4a;color:#bac8d8}
+html[data-theme="dark"] .month-controls .icon-button:hover,html[data-theme="dark"] .icon-button:hover{border-color:#53739d;color:#b9d5f7}
+html[data-theme="dark"] .calendar-view-picker{background:#202b39;border-color:#303b4a}
+html[data-theme="dark"] .calendar-view-picker button{color:#aab7c6}
+html[data-theme="dark"] .calendar-view-picker button.active{background:#263c57;color:#b7d2f4}
+html[data-theme="dark"] .weekdays{border-color:#2b3542}
+html[data-theme="dark"] .weekdays div,html[data-theme="dark"] .calendar-legend,html[data-theme="dark"] .holiday-note,html[data-theme="dark"] .day-empty,html[data-theme="dark"] .empty-state p,html[data-theme="dark"] .history-list small{color:#96a2b0}
+html[data-theme="dark"] .day-cell{background:#1a222b;border-color:#29333f}
+html[data-theme="dark"] .day-cell:hover{background:#22364d}
+html[data-theme="dark"] .day-cell.outside .day-number{color:#647182}
+html[data-theme="dark"] .day-status{color:#a5bfdf}
+html[data-theme="dark"] .day-status.complete{color:#8db7e9}
+html[data-theme="dark"] .day-status.complete i{background:#8db7e9}
+html[data-theme="dark"] .spreadsheet-tools,html[data-theme="dark"] .spreadsheet-actions,html[data-theme="dark"] .period-export{color:#c5d0dd}
+html[data-theme="dark"] .tool-button:not(.primary),html[data-theme="dark"] .export-button,html[data-theme="dark"] .text-button{background:#202b38;border-color:#354151;color:#b9cde5}
+html[data-theme="dark"] .tool-button:not(.primary):hover,html[data-theme="dark"] .export-button:hover,html[data-theme="dark"] .text-button:hover{background:#26394f;border-color:#486589}
+html[data-theme="dark"] .period-export input{background:#202b38;border-color:#354151;color:#e2e9f1;color-scheme:dark}
+html[data-theme="dark"] .period-export label,html[data-theme="dark"] .report-summary-grid span,html[data-theme="dark"] .chart-axis,html[data-theme="dark"] .chart-label,html[data-theme="dark"] .chart-value{color:#9aa8b8}
+html[data-theme="dark"] .report-summary-grid>div,html[data-theme="dark"] .history-list article,html[data-theme="dark"] .notification-setting{border-color:#303b49}
+html[data-theme="dark"] .history-list strong{color:#e0e7f0}
+html[data-theme="dark"] .history-list em{color:#c8d7e8}
+html[data-theme="dark"] .profile-menu>summary{color:#bac8d8}
+html[data-theme="dark"] .profile-menu>summary:hover{background:#202f44}
+html[data-theme="dark"] .profile-dropdown{background:#1a222b;border-color:#303b49;box-shadow:0 15px 40px rgba(0,0,0,.4)}
+html[data-theme="dark"] .dropdown-identity{border-color:#303b49}
+html[data-theme="dark"] .dropdown-identity strong,html[data-theme="dark"] .profile-dropdown>button,html[data-theme="dark"] .profile-notification-toggle{color:#cbd5e1}
+html[data-theme="dark"] .dropdown-identity small{color:#9aa8b8}
+html[data-theme="dark"] .profile-dropdown>button:hover,html[data-theme="dark"] .profile-notification-toggle:hover{background:#253c5a;color:#c5dcf9}
+html[data-theme="dark"] .profile-dropdown .theme-switch{background:#46515f}
+html[data-theme="dark"] .profile-dropdown .theme-switch.on{background:#3e78c2}
+html[data-theme="dark"] .app-menu>summary,html[data-theme="dark"] .app-menu-dropdown{background:#1a222b;border-color:#303b49;color:#dce4ef}
+html[data-theme="dark"] .app-menu-dropdown button{color:#cbd5e1}
+html[data-theme="dark"] .app-menu-dropdown button.active,html[data-theme="dark"] .app-menu-dropdown button:hover{background:#263c57;color:#c8defa}
+html[data-theme="dark"] .footer{color:#8995a3}
