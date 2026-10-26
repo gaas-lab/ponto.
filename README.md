@@ -10,7 +10,7 @@ Laboratório independente de design, tecnologia e experimentação digital.
 
 <img src="assets/gaas-lab-banner.svg" alt="gaas.lab — design, code, ideas" width="100%">
 
-[O Ponto](#-o-ponto) · [Funcionalidades](#-o-que-você-encontra) · [Começar](#-começar) · [Contato](#-créditos)
+[O Ponto](#-o-ponto) · [Funcionalidades](#-o-que-você-encontra) · [Começar](#-começar) · [Privacidade](PRIVACIDADE.md) · [Termos](TERMOS_DE_USO.md)
 
 </div>
 
@@ -141,6 +141,12 @@ Importe o repositório, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHAB
 - As políticas de Row Level Security (RLS) aplicam permissões no Postgres.
 - As fotos ficam em bucket privado e são exibidas por URLs assinadas temporárias.
 - A autenticação e a sessão são gerenciadas pelo Supabase Auth.
+
+## // Licença e documentos legais
+
+O código deste repositório é distribuído sob a [licença MIT](LICENSE), com direitos autorais de Gabriel Rocha.
+
+Os textos de [Privacidade](PRIVACIDADE.md) e [Termos de Uso](TERMOS_DE_USO.md) são rascunhos para revisão. As pendências técnicas e factuais estão em [Revisão legal](REVISAO_LEGAL.md); confirme essas informações antes de apresentar os textos como vigentes.
 
 ## // Roadmap
 
