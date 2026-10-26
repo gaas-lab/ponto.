@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Menu, Moon, Sun, UserRound, X, Upload, Trash2, History, Bell } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Moon, Sun, UserRound, X, Upload, Trash2, History, Bell } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
+import './design.css';
 
 const DEFAULT_WORK_MINUTES = 8 * 60 + 48;
 const BREAK_MINUTES = 60;
@@ -655,17 +656,16 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   return <main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Ponto início"><span className="brand-mark"><Clock3 size={19} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></a>
+      <nav className="primary-nav" aria-label="Navegação principal">
+        {[[Clock3,'Ponto','clock'],[BarChart3,'Dashboard','dashboard'],[FileText,'Relatórios','report'],[History,'Histórico','history']].map(([Icon,label,page])=><button type="button" key={page} className={currentPage===page?'active':''} onClick={() => navTo(page)} aria-current={currentPage===page?'page':undefined}><Icon size={16}/><span>{label}</span></button>)}
+      </nav>
       <div className="topbar-right">
-        <span className="today-label">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).format(today)}</span>
         {isMasterAdmin && <label className="calendar-user-picker"><span>Ver pontos de</span><select value={activeUser.id} onChange={(event) => changeViewedUser(event.target.value)} aria-label="Selecionar usuário para ver os pontos"><option value={session.user.id}>Meus pontos ({profile.name || session.user.email})</option>{adminUsers.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email}</option>)}</select></label>}
-        <details className="app-menu"><summary aria-label="Abrir menu principal"><Menu size={17} /><span>Menu</span><ChevronDown size={13} /></summary><nav className="app-menu-dropdown" aria-label="Menu principal">
-          {[[Clock3,'Lançamento de horas','clock'],[BarChart3,'Dashboard','dashboard'],[FileText,'Relatório mensal','report'],[History,'Histórico completo','history']].map(([Icon,label,page])=><button type="button" key={page} className={currentPage===page?'active':''} onClick={() => { navTo(page); document.querySelector('.app-menu')?.removeAttribute('open'); }}><Icon size={16} />{label}</button>)}
-        </nav></details>
         <details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><label className="profile-notification-toggle"><Bell size={16}/><span>Aviso da saída · 10 min antes</span><span className={`theme-switch ${notificationsEnabled?'on':''}`}/><input type="checkbox" checked={notificationsEnabled} onChange={changeExitNotification} aria-label="Avisar 10 minutos antes da previsão de saída"/></label><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details>
       </div>
     </header>
 
-    {currentPage!=='clock'&&<section className="welcome-row"><div><p className="eyebrow">{({dashboard:'VISÃO GERAL',report:'ACOMPANHAMENTO',history:'SEUS REGISTROS',notifications:'PREFERÊNCIAS'})[currentPage]}</p><h1>{currentPage==='dashboard'?'Dashboard':({report:'Relatório mensal',history:'Histórico completo',notifications:'Notificações de horário'})[currentPage]}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{currentPage==='dashboard'?'Resumo das suas horas e do seu saldo neste mês.':'Acompanhe sua rotina de trabalho em um só lugar.'}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>}
+    <section className="welcome-row"><div><p className="eyebrow">{({clock:'SUA ROTINA',dashboard:'VISÃO GERAL',report:'ACOMPANHAMENTO',history:'SEUS REGISTROS',notifications:'PREFERÊNCIAS'})[currentPage]}</p><h1>{currentPage==='clock'?'Lançamento de horas':currentPage==='dashboard'?'Dashboard':({report:'Relatório mensal',history:'Histórico completo',notifications:'Notificações de horário'})[currentPage]}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{currentPage==='clock'?'Acompanhe sua jornada e registre os horários do dia.':currentPage==='dashboard'?'Resumo das suas horas e do seu saldo neste mês.':'Acompanhe sua rotina de trabalho em um só lugar.'}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
 
     {currentPage==='clock'&&<section className="overview-grid" id="dashboard">
       <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ACUMULADO</small><strong>{workedDays ? `${monthlyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(monthlyBalance))}` : '—'}</strong></div><span className="monthly-balance-label">{workedDays ? monthlyBalance >= 0 ? 'Horas extras' : 'Horas devidas' : 'Sem dias completos'}</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
@@ -689,7 +689,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
 
     {currentPage==='dashboard'&&<section className="monthly-report-section dashboard-page" id="month-report">
       <div className="section-heading report-heading"><div><p className="eyebrow">DASHBOARD</p><h2>Horas por dia</h2></div><span className="month-title">{monthName(month)}</span></div>
-      <div className="report-chart-card"><div className="report-chart" role="img" aria-label={`Gráfico de horas trabalhadas por dia em ${monthName(month)}`}>
+      <div className="report-chart-card"><div className="report-chart" role="group" aria-label={`Gráfico de horas trabalhadas por dia em ${monthName(month)}`}>
         {Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, index) => {
           const day = new Date(month.getFullYear(), month.getMonth(), index + 1);
           const key = dateKey(day);
@@ -697,7 +697,8 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
           const minutes = workedMinutes(marks);
           const balance = minutes - WORK_MINUTES;
           const status = marks.length !== 4 ? 'partial' : balance < 0 ? 'below' : balance === 0 ? 'exact' : 'above';
-          return <div className="chart-column" key={key} title={`${day.getDate()}: ${marks.length ? `${formatDuration(minutes)}${marks.length === 4 ? ` · ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))} de saldo` : ''}` : 'sem registros'}`}><span className="chart-value">{minutes ? formatDuration(minutes) : ''}</span><div className={`chart-bar ${status}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / (WORK_MINUTES * 1.5) * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
+          const balanceLabel = marks.length === 4 ? `Saldo ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))}` : 'Dia em andamento';
+          return <div className="chart-column" key={key} role="img" tabIndex="0" aria-label={`${day.getDate()} de ${monthName(month)}: ${marks.length ? `${formatDuration(minutes)} trabalhadas. ${balanceLabel}.` : 'sem registros'}`}><div className="chart-tooltip" aria-hidden="true"><strong>{marks.length ? formatDuration(minutes) : 'Sem registros'}</strong><span>{marks.length ? 'trabalhadas' : 'neste dia'}</span>{marks.length === 4 && <small>{balance >= 0 ? '+' : '−'}{formatDuration(Math.abs(balance))} de saldo</small>}</div><div className={`chart-bar ${status}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / (WORK_MINUTES * 1.5) * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
         })}
       </div><div className="chart-axis"><span>0h</span><span>Meta diária: {formatDuration(WORK_MINUTES)}</span></div><div className="chart-legend"><span><i className="below"/>Abaixo da carga</span><span><i className="exact"/>Carga cumprida</span><span><i className="above"/>Acima da carga</span></div></div>
     </section>}
