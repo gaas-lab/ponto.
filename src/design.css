@@ -499,3 +499,50 @@ html[data-theme="dark"] .photo-upload-button{background:#1c2b3e;border-color:#29
 .calendar-view-picker button { border-radius: 8px; }
 .exit-icon, .monthly-balance-icon, .timeline-icon, .empty-icon, .summary-calendar { border-radius: 11px; }
 .profile-dropdown, .day-modal, .profile-modal { border-radius: 14px; }
+.work-settings { margin-top: 24px; }
+@media (max-width: 760px) { .work-settings { margin-top: 18px; } }
+.monthly-balance.negative .monthly-balance-icon svg { color: #8f001b; }
+
+/* Report spacing: keep the page header distinct and the metric panel compact. */
+.monthly-report-section.report-page { margin-top: 12px; }
+.report-page .report-heading { gap: 16px; margin-bottom: 16px; }
+.report-page .report-table-card { padding: 20px; }
+.report-page .report-summary-grid { gap: 12px; margin-top: 0; }
+@media (max-width: 760px) {
+  .monthly-report-section.report-page { margin-top: 8px; }
+  .report-page .report-table-card { padding: 14px; }
+  .report-page .report-summary-grid { gap: 10px; }
+  .report-page .report-summary-grid > div { padding: 12px; }
+}
+
+/* Consistent page rhythm across clock, dashboard, report and history. */
+.welcome-row { gap: 24px; padding: 28px 0 24px; }
+.overview-grid { gap: 14px; }
+.calendar-section { margin-top: 28px; }
+.calendar-section .section-heading { gap: 16px; margin-bottom: 14px; }
+.calendar-card { padding: 16px; }
+.bottom-grid { gap: 14px; margin-top: 16px; }
+.monthly-report-section { margin-top: 12px; }
+.report-page .report-heading, .dashboard-page .report-heading { gap: 16px; margin-bottom: 16px; }
+.report-page .report-table-card { margin-top: 0; }
+.report-page .report-days-card { margin-top: 16px; }
+.report-page .spreadsheet-tools { margin-top: 16px; }
+.report-page .report-summary-grid { gap: 12px; margin-top: 0; }
+.history-panel { margin-top: 12px; padding: 22px; }
+.history-list article { gap: 16px; padding: 13px 6px; }
+.footer { padding-top: 26px; }
+@media (max-width: 760px) {
+  .welcome-row { gap: 12px; padding: 24px 0 20px; }
+  .overview-grid { gap: 12px; }
+  .calendar-section { margin-top: 24px; }
+  .calendar-section .section-heading { gap: 10px; margin-bottom: 12px; }
+  .calendar-card { padding: 12px; }
+  .bottom-grid { gap: 12px; margin-top: 12px; }
+  .monthly-report-section { margin-top: 8px; }
+  .report-page .report-heading, .dashboard-page .report-heading { gap: 12px; margin-bottom: 12px; }
+  .report-page .report-days-card { margin-top: 12px; }
+  .report-page .spreadsheet-tools { margin-top: 12px; }
+  .history-panel { margin-top: 8px; padding: 16px; }
+  .history-list article { gap: 8px 12px; padding: 12px 4px; }
+  .footer { padding-top: 20px; }
+}
