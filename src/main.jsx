@@ -29,6 +29,23 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === 'dark');
+  const [installPrompt, setInstallPrompt] = useState(null);
+  useEffect(() => {
+    if ('serviceWorker' in navigator && import.meta.env.PROD) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('Não foi possível preparar o modo offline.', error));
+    }
+    const captureInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const clearInstallPrompt = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+    window.addEventListener('appinstalled', clearInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+      window.removeEventListener('appinstalled', clearInstallPrompt);
+    };
+  }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
     localStorage.setItem(THEME_KEY, darkMode ? 'dark' : 'light');
@@ -43,10 +60,10 @@ function App() {
   }, []);
   if (authLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seu espaço…</span></div>;
   if (!session) return <AuthScreen configured={isSupabaseConfigured} darkMode={darkMode} setDarkMode={setDarkMode} />;
-  return <ClockApp key={session.user.id} session={session} darkMode={darkMode} setDarkMode={setDarkMode} onSignOut={() => supabase.auth.signOut()} />;
+  return <ClockApp key={session.user.id} session={session} darkMode={darkMode} setDarkMode={setDarkMode} installPrompt={installPrompt} setInstallPrompt={setInstallPrompt} onSignOut={() => supabase.auth.signOut()} />;
 }
 
-function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
+function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPrompt, onSignOut }) {
   const today = new Date();
   const [clockNow, setClockNow] = useState(() => new Date());
   useEffect(() => {
@@ -92,6 +109,10 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [currentPage, setCurrentPage] = useState('clock');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') === 'true');
+  const [showIOSInstallHelp, setShowIOSInstallHelp] = useState(false);
+  const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const canOfferInstall = !isStandalone && (Boolean(installPrompt) || isIOSDevice);
   const [calendarView, setCalendarView] = useState(() => localStorage.getItem(CALENDAR_VIEW_KEY) || 'month');
   const [calendarFocus, setCalendarFocus] = useState(today);
   const [useBalanceForExit, setUseBalanceForExit] = useState(() => localStorage.getItem(EXIT_BALANCE_KEY) !== 'false');
@@ -157,6 +178,16 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     setDays({});
     lastDaysRef.current = {};
     setViewingUser(nextUser);
+  }
+
+  async function installPwa() {
+    if (!installPrompt) {
+      setShowIOSInstallHelp((visible) => !visible);
+      return;
+    }
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
   }
 
   async function deleteViewedMonth() {
@@ -661,7 +692,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
       </nav>
       <div className="topbar-right">
         {isMasterAdmin && <label className="calendar-user-picker"><span>Ver pontos de</span><select value={activeUser.id} onChange={(event) => changeViewedUser(event.target.value)} aria-label="Selecionar usuário para ver os pontos"><option value={session.user.id}>Meus pontos ({profile.name || session.user.email})</option>{adminUsers.filter((user) => user.id !== session.user.id).map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email}</option>)}</select></label>}
-        <details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div><button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><label className="profile-notification-toggle"><Bell size={16}/><span>Aviso da saída · 10 min antes</span><span className={`theme-switch ${notificationsEnabled?'on':''}`}/><input type="checkbox" checked={notificationsEnabled} onChange={changeExitNotification} aria-label="Avisar 10 minutos antes da previsão de saída"/></label><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details>
+        <details className="profile-menu"><summary aria-label="Abrir opções do perfil">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span className="profile-name">{profile.name || 'Meu perfil'}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><div className="dropdown-identity">{profile.photo ? <img className="avatar avatar-photo" src={profile.photo} alt="" /> : <span className="avatar">{(profile.name || 'P').trim().slice(0, 1).toUpperCase()}</span>}<span><strong>{profile.name || 'Meu perfil'}</strong><small>{session.user.email}</small></span></div>{canOfferInstall && <><button onClick={installPwa}><Download size={16} />{installPrompt ? 'Instalar app' : 'Como instalar no iPhone'}</button>{showIOSInstallHelp && isIOSDevice && <p className="pwa-install-help"><Info size={15} />No Safari, toque em Compartilhar e escolha “Adicionar à Tela de Início”.</p>}</>}<button onClick={() => { setProfileOpen(true); document.querySelector('.profile-menu')?.removeAttribute('open'); }}><UserRound size={16} />Editar perfil</button><button onClick={() => setDarkMode((value) => !value)}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}{darkMode ? 'Modo claro' : 'Modo escuro'}<span className={`theme-switch ${darkMode ? 'on' : ''}`} /></button><label className="profile-notification-toggle"><Bell size={16}/><span>Aviso da saída · 10 min antes</span><span className={`theme-switch ${notificationsEnabled?'on':''}`}/><input type="checkbox" checked={notificationsEnabled} onChange={changeExitNotification} aria-label="Avisar 10 minutos antes da previsão de saída"/></label><button onClick={onSignOut}><LogOut size={16} />Sair</button></div></details>
       </div>
     </header>
 
