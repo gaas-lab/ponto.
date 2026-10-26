@@ -165,12 +165,6 @@ Os textos de [Privacidade](PRIVACIDADE.md) e [Termos de Uso](TERMOS_DE_USO.md) s
 
 Desenvolvido por **Gabriel Rocha** · [Gaaslab](https://github.com/gaas-lab).
 
-## // Licença
-
-Este repositório ainda não contém um arquivo de licença. Consulte o responsável antes de reutilizar ou redistribuir o código.
-
----
-
 <div align="center">
 
 `DESIGN × CODE × IDEAS`
