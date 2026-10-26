@@ -486,3 +486,16 @@ html[data-theme="dark"] .modal-progress,html[data-theme="dark"] .day-detail-prog
 html[data-theme="dark"] .expected-banner{background:#1c2b3e;border-color:#29476b}
 html[data-theme="dark"] .photo-upload-button{background:#1c2b3e;border-color:#29476b;color:#64adff}
 @media(max-width:760px){.app-shell{padding:0 14px 24px}.topbar{height:62px}.overview-grid{grid-template-columns:1fr}}
+
+/* Keep completed-day labels readable; the blue belongs to the small status dot. */
+.day-status.complete { background: transparent; }
+.day-status.complete i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
+.day-status.day-balance.complete { background: transparent; }
+.day-cell { border-radius: 14px; }
+.calendar-card, .hours-card, .exit-card, .recent-card, .summary-card,
+.page-panel, .report-chart-card, .report-table-card, .report-days-card { border-radius: 16px; }
+.monthly-balance { border-radius: 13px; }
+.date-chip, .icon-button, .tool-button, .export-button, .calendar-view-picker { border-radius: 10px; }
+.calendar-view-picker button { border-radius: 8px; }
+.exit-icon, .monthly-balance-icon, .timeline-icon, .empty-icon, .summary-calendar { border-radius: 11px; }
+.profile-dropdown, .day-modal, .profile-modal { border-radius: 14px; }
