@@ -515,6 +515,16 @@ html[data-theme="dark"] .photo-upload-button{background:#1c2b3e;border-color:#29
   .report-page .report-summary-grid > div { padding: 12px; }
 }
 
+/* Primary action labels must stay white over their blue hover backgrounds. */
+.tool-button.primary:hover:not(:disabled),
+.auth-submit:hover:not(:disabled),
+.add-button:hover:not(:disabled),
+.done-button:hover:not(:disabled) { color: #fff; }
+html[data-theme="dark"] .tool-button.primary:hover:not(:disabled),
+html[data-theme="dark"] .auth-submit:hover:not(:disabled),
+html[data-theme="dark"] .add-button:hover:not(:disabled),
+html[data-theme="dark"] .done-button:hover:not(:disabled) { color: #fff; }
+
 /* Consistent page rhythm across clock, dashboard, report and history. */
 .welcome-row { gap: 24px; padding: 28px 0 24px; }
 .overview-grid { gap: 14px; }
