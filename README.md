@@ -156,7 +156,7 @@ Os textos de [Privacidade](PRIVACIDADE.md) e [Termos de Uso](TERMOS_DE_USO.md) s
 - [x] Importação e exportação de planilhas
 - [x] Histórico completo e calendário mensal, semanal e diário
 - [x] Tema claro/escuro e aviso de previsão de saída
-- [ ] PWA instalável
+- [x] PWA instalável, com suporte para adicionar à tela inicial
 - [ ] Jornadas diferentes por usuário
 - [ ] Banco de horas com regras de compensação
 - [ ] Melhorias adicionais de acessibilidade
