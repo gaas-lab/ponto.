@@ -1,240 +1,159 @@
-# ⏱️ App de Controle de Ponto
+# Ponto
 
-Aplicação web desenvolvida para facilitar o controle da jornada de trabalho, permitindo registrar horários de entrada, saída e intervalo, acompanhar o saldo de horas e visualizar a previsão de término da jornada.
+Aplicação web para registrar a jornada de trabalho, acompanhar o saldo de horas e estimar o horário de saída. O sistema oferece calendário, dashboard, histórico, relatórios e administração de uma carga horária global.
 
-O projeto foi desenvolvido com foco em **simplicidade, usabilidade e acesso rápido**, podendo ser utilizado diretamente pelo navegador.
+## Funcionalidades
 
----
+- Registro de entrada, saída para almoço, retorno do almoço e saída do expediente.
+- Cálculo das horas trabalhadas, do saldo diário e do horário previsto para sair.
+- Opção para usar o saldo acumulado na previsão de saída.
+- Carga horária global configurável pelo usuário master e compartilhada por todas as contas. O padrão inicial é **8h48min**.
+- Calendário com visualização mensal, semanal ou diária e indicação de feriados nacionais.
+- Dashboard mensal com gráfico diário. Nos dias completos, as barras indicam carga abaixo da meta, carga exata ou carga acima da meta; o hover e o foco pelo teclado mostram as horas e o saldo do dia.
+- Relatório mensal para impressão ou salvamento em PDF.
+- Exportação de períodos para Excel e importação de registros em `.xlsx`, `.xls` ou `.csv` usando o modelo fornecido pelo app.
+- Histórico completo dos registros.
+- Notificação do navegador dez minutos antes da previsão de saída, se o usuário permitir.
+- Perfil com nome e foto armazenada no Supabase Storage.
+- Tema claro e escuro e interface responsiva para celular.
+- Sincronização dos registros com o Supabase.
 
-## 🚀 Funcionalidades
+## Cálculo da jornada
 
-* 🔐 Sistema de autenticação de usuários
-* 👤 Perfil com nome e foto
-* 🕐 Registro de entrada
-* 🍽️ Registro e controle do intervalo
-* 🏁 Registro de saída
-* 📊 Cálculo automático da jornada
-* ⏰ Previsão de horário de saída
-* ➕ Cálculo de saldo positivo de horas
-* ➖ Identificação de saldo negativo
-* 📅 Controle da jornada por dia
-* 🇧🇷 Consideração do calendário de feriados
-* 💾 Persistência dos dados no Supabase
-* 📱 Interface responsiva
-* ☁️ Deploy online pela Vercel
+O tempo trabalhado é a soma dos períodos entre entrada e saída para almoço e entre retorno do almoço e saída final. O intervalo não entra no total trabalhado.
 
----
-
-## 🧮 Como funciona
-
-A aplicação utiliza a jornada diária configurada para calcular automaticamente o horário previsto de saída.
-
-### Exemplo
+O saldo diário é calculado quando as quatro batidas estão registradas:
 
 ```text
-Entrada:        08:00
-Intervalo:      12:00 → 13:00
-Jornada:        8h48
-
-Saída prevista: 17:48
+saldo do dia = tempo trabalhado − carga horária global
 ```
 
-O sistema também permite acompanhar o **saldo de horas**, facilitando a identificação de horas positivas ou negativas ao longo dos dias.
+Dias com batidas incompletas aparecem como em andamento e não entram no saldo acumulado. A previsão usa a carga horária global e o intervalo registrado; se o intervalo ainda não estiver completo, considera uma hora.
 
----
+## Administração master
 
-## 🛠️ Tecnologias
+A conta master pode consultar registros de todos os usuários, alterar a carga horária global e apagar os registros de um mês para a conta selecionada. A checagem de permissões ocorre tanto na interface quanto nas políticas e funções do banco.
 
-| Tecnologia | Utilização                    |
-| ---------- | ----------------------------- |
-| HTML5      | Estrutura da aplicação        |
-| CSS3       | Interface e responsividade    |
-| JavaScript | Lógica e funcionalidades      |
-| Supabase   | Banco de dados e autenticação |
-| Vercel     | Hospedagem e deploy           |
-| GitHub     | Versionamento                 |
+Atualmente, a conta autorizada é `gaasbrel@gmail.com`. Se esse endereço mudar, atualize as verificações correspondentes em `src/main.jsx` e `supabase/setup.sql`.
 
----
+## Tecnologias
 
-## 📁 Estrutura do projeto
+| Tecnologia | Uso |
+| --- | --- |
+| React 18 | Interface e componentes |
+| Vite 6 | Desenvolvimento e build |
+| CSS | Layout, temas e responsividade |
+| Supabase Auth | Cadastro, login e sessão |
+| Supabase Postgres e RLS | Registros de ponto, configuração global e permissões |
+| Supabase Storage | Fotos de perfil |
+| SheetJS (`xlsx`) | Importação e exportação de planilhas |
+| Lucide React | Ícones |
+| BrasilAPI | Consulta de feriados nacionais |
+| Vercel | Hospedagem e publicação |
+
+## Executar localmente
+
+### Pré-requisitos
+
+- Node.js e npm.
+- Um projeto Supabase configurado.
+
+### Instalação
+
+```bash
+git clone https://github.com/gaas-lab/ponto..git
+cd 'ponto.'
+npm install
+```
+
+Copie o exemplo para `.env.local` e configure as variáveis nesse arquivo:
+
+```bash
+cp .env.example .env.local
+```
+
+```dotenv
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=SUA_CHAVE_PUBLICAVEL
+```
+
+O app também aceita `VITE_SUPABASE_ANON_KEY` no lugar de `VITE_SUPABASE_PUBLISHABLE_KEY`.
+
+Execute `supabase/setup.sql` no SQL Editor do projeto Supabase. O script cria a tabela de registros, a configuração da carga global, as políticas de acesso, a função de administração e o bucket privado de avatares.
+
+No Supabase Auth, habilite o método de e-mail e senha. Para desenvolvimento local, adicione `http://localhost:5173` às URLs autorizadas de redirecionamento, se necessário para o fluxo de confirmação de e-mail.
+
+Inicie o servidor:
+
+```bash
+npm run dev
+```
+
+O Vite informa o endereço local no terminal. Para gerar e visualizar o build de produção:
+
+```bash
+npm run build
+npm run preview
+```
+
+## Publicar na Vercel
+
+1. Importe o repositório no projeto da Vercel.
+2. Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` nas variáveis de ambiente.
+3. Publique o projeto. A Vercel detecta o Vite e executa o build com `npm run build`.
+4. Adicione o domínio publicado às URLs autorizadas no Supabase Auth.
+
+As chaves `VITE_*` são incluídas no bundle do navegador. Use somente a chave publicável/anon do Supabase; nunca coloque uma `service_role` ou outro segredo nessas variáveis.
+
+## Estrutura do projeto
 
 ```text
-app-de-ponto/
-│
+.
 ├── index.html
-├── dashboard.html
-│
-├── css/
-│   └── style.css
-│
-├── js/
-│   ├── dashboard.js
-│   ├── ponto.js
-│   └── profile.js
-│
-├── assets/
-│   ├── images/
-│   └── icons/
-│
-└── README.md
+├── package.json
+├── package-lock.json
+├── .env.example
+├── src/
+│   ├── main.jsx                 # Aplicação, páginas e cálculos de jornada
+│   ├── styles.css               # Estilos base e componentes existentes
+│   ├── design.css               # Sistema visual, temas e layout responsivo
+│   ├── components/
+│   │   ├── Account.jsx          # Login, cadastro e perfil
+│   │   └── account.css
+│   └── lib/
+│       ├── supabase.js          # Cliente Supabase
+│       └── spreadsheet.js       # Exportação lazy-loaded do SheetJS
+└── supabase/
+    └── setup.sql                # Tabelas, RLS, função master e Storage
 ```
 
-> A estrutura pode variar conforme a versão atual do projeto.
+## Dados e segurança
 
----
+- Cada usuário pode ler e alterar os próprios registros.
+- A conta master pode administrar os registros de todas as contas.
+- As políticas de Row Level Security (RLS) aplicam essas permissões no Postgres.
+- Fotos ficam em um bucket privado e são exibidas por URLs assinadas temporárias.
+- A sessão de autenticação é gerenciada pelo Supabase Auth.
 
-## 🔐 Autenticação
+## Roadmap
 
-A autenticação dos usuários é realizada através do **Supabase Auth**.
+- [x] Dashboard e gráfico de horas por dia
+- [x] Carga horária global administrável pela conta master
+- [x] Relatório mensal e exportação para PDF
+- [x] Importação e exportação de planilhas
+- [x] Histórico completo
+- [x] Calendário mensal, semanal e diário
+- [x] Tema claro e escuro
+- [x] Notificação de previsão de saída
+- [ ] PWA instalável
+- [ ] Jornadas diferentes por usuário
+- [ ] Banco de horas com regras de compensação
+- [ ] Melhorias adicionais de acessibilidade
 
-Cada usuário possui sua própria sessão e seus dados são associados ao respectivo perfil.
+## Créditos
 
-O projeto também utiliza o Supabase para armazenamento das informações relacionadas ao controle de ponto e perfil dos usuários.
+Desenvolvido por **Gabriel Rocha** · [Gaaslab](https://github.com/gaas-lab).
 
----
+## Licença
 
-## 👤 Perfil do usuário
-
-O sistema permite que o usuário mantenha informações básicas do seu perfil, incluindo:
-
-* Nome
-* Foto de perfil
-* Dados vinculados à conta
-
-As imagens de perfil são armazenadas utilizando o **Supabase Storage**.
-
----
-
-## 📅 Jornada e saldo de horas
-
-O sistema foi desenvolvido considerando uma jornada diária de:
-
-**8 horas e 48 minutos**
-
-O intervalo para almoço é contabilizado separadamente e não entra no cálculo da jornada trabalhada.
-
-A aplicação utiliza os horários registrados para calcular:
-
-* Tempo trabalhado
-* Tempo de intervalo
-* Horário previsto de saída
-* Saldo diário
-* Horas positivas
-* Horas negativas
-
----
-
-## 🇧🇷 Feriados
-
-O sistema possui lógica para considerar feriados no calendário da aplicação, evitando que o usuário registre uma jornada normalmente em datas que não possuem expediente.
-
----
-
-## 🌐 Deploy
-
-A aplicação pode ser publicada utilizando a **Vercel**, conectando o repositório do GitHub ao projeto.
-
-Fluxo utilizado:
-
-```text
-GitHub
-   ↓
-Vercel
-   ↓
-Deploy automático
-   ↓
-Aplicação Web
-```
-
-A cada atualização enviada para o repositório, a Vercel pode realizar um novo deploy automaticamente.
-
----
-
-## ⚙️ Configuração
-
-Para executar o projeto localmente:
-
-### 1. Clone o repositório
-
-```bash
-git clone https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
-```
-
-### 2. Entre na pasta
-
-```bash
-cd SEU-REPOSITORIO
-```
-
-### 3. Configure o Supabase
-
-Crie um projeto no Supabase e configure:
-
-* Authentication
-* Database
-* Storage
-* Policies de acesso
-
-As credenciais do projeto devem ser configuradas no código conforme a estrutura utilizada pela aplicação.
-
-> **Importante:** nunca publique chaves privadas, service keys ou credenciais sensíveis no GitHub.
-
----
-
-## 📌 Objetivo do projeto
-
-O projeto nasceu da necessidade de tornar o acompanhamento da jornada de trabalho mais simples e visual.
-
-A proposta é reduzir a necessidade de cálculos manuais, permitindo que o usuário saiba rapidamente:
-
-> **"Que horas eu posso sair hoje?"**
-
-Além disso, o acompanhamento do saldo de horas ajuda a evitar o acúmulo inesperado de horas negativas.
-
----
-
-## 🎨 Interface
-
-A interface foi desenvolvida buscando uma experiência moderna, responsiva e inspirada em aplicações digitais contemporâneas, com foco em:
-
-* Hierarquia visual
-* Informações objetivas
-* Feedback visual
-* Responsividade
-* Facilidade de uso
-
----
-
-## 🔮 Próximos passos
-
-Possíveis melhorias futuras:
-
-* [x] Dashboard com gráficos de horas
-* [x] Relatório mensal
-* [x] Exportação para PDF
-* [x] Exportação para Excel
-* [x] Histórico completo de ponto
-* [x] Notificações de horário
-* [ ] PWA para instalação no celular
-* [ ] Modo escuro aprimorado
-* [ ] Gestão de diferentes jornadas
-* [ ] Sistema de banco de horas
-* [ ] Calendário visual da jornada
-* [ ] Melhorias de acessibilidade
-
----
-
-## 📄 Licença
-
-Este projeto foi desenvolvido para fins de estudo, produtividade e experimentação com desenvolvimento web.
-
-
----
-
-## 👨‍💻 Desenvolvido por
-
-**Gabriel Rocha**
-
-Projeto desenvolvido utilizando:
-
-`HTML` · `CSS` · `JavaScript` · `Supabase` · `Vercel` · `GitHub`
+Este repositório ainda não contém um arquivo de licença. Consulte o responsável antes de reutilizar ou redistribuir o código.
