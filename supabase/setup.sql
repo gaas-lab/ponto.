@@ -8,6 +8,22 @@ create table if not exists public.attendance_records (
   constraint attendance_marks_are_array check (jsonb_typeof(marks) = 'array' and jsonb_array_length(marks) <= 4)
 );
 
+-- Shared system configuration. Run this setup again to add global work hours.
+create table if not exists public.app_settings (
+  id integer primary key check (id = 1),
+  work_minutes integer not null default 528 check (work_minutes between 1 and 1440),
+  updated_at timestamptz not null default now()
+);
+insert into public.app_settings (id, work_minutes) values (1, 528) on conflict (id) do nothing;
+alter table public.app_settings enable row level security;
+grant select, insert, update on public.app_settings to authenticated;
+drop policy if exists "Authenticated users read app settings" on public.app_settings;
+create policy "Authenticated users read app settings" on public.app_settings for select to authenticated using (true);
+drop policy if exists "Master admin manages app settings" on public.app_settings;
+create policy "Master admin manages app settings" on public.app_settings for all to authenticated
+using (lower((select auth.jwt() ->> 'email')) = 'gaasbrel@gmail.com')
+with check (lower((select auth.jwt() ->> 'email')) = 'gaasbrel@gmail.com');
+
 alter table public.attendance_records enable row level security;
 grant select, insert, update, delete on public.attendance_records to authenticated;
 

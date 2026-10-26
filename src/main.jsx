@@ -5,7 +5,7 @@ import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import './styles.css';
 
-const WORK_MINUTES = 8 * 60 + 48;
+const DEFAULT_WORK_MINUTES = 8 * 60 + 48;
 const BREAK_MINUTES = 60;
 const KEY = 'ponto-days-v1';
 const PROFILE_KEY = 'ponto-profile-v1';
@@ -53,6 +53,41 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     return () => window.clearInterval(timer);
   }, []);
   const isMasterAdmin = session.user.email?.toLowerCase() === 'gaasbrel@gmail.com';
+  const [workMinutes, setWorkMinutes] = useState(DEFAULT_WORK_MINUTES);
+  const [workMinutesInput, setWorkMinutesInput] = useState('08:48');
+  const [workMinutesBusy, setWorkMinutesBusy] = useState(false);
+  const [workMinutesMessage, setWorkMinutesMessage] = useState('');
+  const [workMinutesError, setWorkMinutesError] = useState('');
+  const formatWorkTimeInput = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+  useEffect(() => {
+    let active = true;
+    const loadWorkMinutes = async () => {
+      const { data, error } = await supabase.from('app_settings').select('work_minutes').eq('id', 1).maybeSingle();
+      if (!active) return;
+      if (!error && Number.isInteger(data?.work_minutes) && data.work_minutes > 0) {
+        setWorkMinutes(data.work_minutes);
+        setWorkMinutesInput(formatWorkTimeInput(data.work_minutes));
+      }
+    };
+    loadWorkMinutes();
+    const channel = supabase.channel('app-settings-work-minutes').on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: 'id=eq.1' }, (payload) => {
+      const next = payload.new?.work_minutes;
+      if (Number.isInteger(next) && next > 0) { setWorkMinutes(next); setWorkMinutesInput(formatWorkTimeInput(next)); }
+    }).subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
+  async function saveWorkMinutes(event) {
+    event.preventDefault();
+    if (!isMasterAdmin) return;
+    const [hours, minutes] = workMinutesInput.split(':').map(Number);
+    const next = hours * 60 + minutes;
+    if (!Number.isInteger(next) || next < 1 || next > 1440 || minutes > 59) { setWorkMinutesError('Informe uma jornada entre 00:01 e 24:00.'); return; }
+    setWorkMinutesBusy(true); setWorkMinutesError(''); setWorkMinutesMessage('');
+    const { error } = await supabase.from('app_settings').upsert({ id: 1, work_minutes: next }, { onConflict: 'id' });
+    if (error) setWorkMinutesError(error.message || 'Não foi possível salvar a carga horária.');
+    else { setWorkMinutes(next); setWorkMinutesMessage('Carga horária atualizada para todos os usuários.'); }
+    setWorkMinutesBusy(false);
+  }
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [currentPage, setCurrentPage] = useState('clock');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('ponto-notifications-v1') === 'true');
@@ -64,6 +99,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersError, setAdminUsersError] = useState('');
   const activeUser = isMasterAdmin ? viewingUser : { id: session.user.id, email: session.user.email, full_name: session.user.user_metadata?.full_name || 'Meus pontos' };
+  const WORK_MINUTES = workMinutes;
   const isViewingOwnData = activeUser.id === session.user.id;
   const userDaysKey = `${KEY}:${activeUser.id}`;
   const [days, setDays] = useState({});
@@ -388,7 +424,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     const balanceText = rangeComplete.length ? `${rangeBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(rangeBalance))}` : 'Sem dias completos';
     const summary = XLSX.utils.aoa_to_sheet([
       ['RESUMO DO PERÍODO', `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${startValue}T12:00:00`))} a ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${endValue}T12:00:00`))}`],
-      ['Carga diária', '8h 48min'],
+      ['Carga diária', formatDuration(WORK_MINUTES)],
       ['Horas trabalhadas', formatDuration(rangeWorked)],
       ['Total de batidas', punchCount],
       ['Dias com quatro batidas', rangeComplete.length],
@@ -432,7 +468,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     }
     reportWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório mensal - ${escapeHtml(monthName(month))}</title><style>
       body{font:12px Arial,sans-serif;color:#24343a;padding:28px}h1{font-size:22px;margin:0 0 5px}p{color:#66757b;margin:5px 0 20px}.stats{display:flex;gap:12px;margin:18px 0}.stats div{border:1px solid #dce5e4;border-radius:8px;padding:12px;flex:1}.stats strong{display:block;font-size:17px;margin-top:5px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #dfe5e5;padding:7px 5px;text-align:left}th{background:#f0f4f3}footer{margin-top:20px;color:#738187;font-size:10px}@media print{body{padding:0}@page{size:landscape;margin:12mm}}</style></head><body>
-      <h1>Relatório mensal de ponto</h1><p>${escapeHtml(person)} · ${escapeHtml(monthName(month))} · Jornada diária prevista: 8h 48min</p>
+      <h1>Relatório mensal de ponto</h1><p>${escapeHtml(person)} · ${escapeHtml(monthName(month))} · Jornada diária prevista: ${escapeHtml(formatDuration(WORK_MINUTES))}</p>
       <div class="stats"><div>Horas trabalhadas<strong>${escapeHtml(formatDuration(totalWorked))}</strong></div><div>Dias completos<strong>${workedDays}</strong></div><div>Saldo acumulado<strong>${workedDays ? escapeHtml(formatBalanceCompact(monthlyBalance)) : '—'}</strong></div></div>
       <table><thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída almoço</th><th>Volta almoço</th><th>Saída</th><th>Horas</th><th>Saldo</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
       <footer>Gerado pelo Ponto. O intervalo de almoço não conta como hora trabalhada.</footer>
@@ -642,7 +678,7 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
         {calendarView !== 'day' && <div className="weekdays">{(calendarView === 'week' ? calendarDays : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']).map((d) => <div key={typeof d === 'string' ? d : dateKey(d)}>{typeof d === 'string' ? d : new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric' }).format(d)}</div>)}</div>}
         <div className="calendar-grid">{calendarDays.map((day, idx) => {
           const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const holiday = holidays[key];
-          if (calendarView === 'day') return <DayViewCard key={key} date={day} marks={marks} holiday={holiday} onSave={(nextMarks) => saveMarks(key, nextMarks)} workedMinutes={workedMinutes} expectedExit={expectedExit} onRegisterNow={(nextMarks) => saveMarks(key, nextMarks)} />;
+          if (calendarView === 'day') return <DayViewCard key={key} date={day} marks={marks} holiday={holiday} onSave={(nextMarks) => saveMarks(key, nextMarks)} workedMinutes={workedMinutes} expectedExit={expectedExit} onRegisterNow={(nextMarks) => saveMarks(key, nextMarks)} workMinutes={WORK_MINUTES} />;
           return <button key={`${key}-${idx}`} className={`day-cell ${inMonth ? '' : 'outside'} ${isToday ? 'is-today' : ''} ${holiday ? 'is-holiday' : ''}`} onClick={() => { setCalendarFocus(day); if (calendarView === 'month') setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); setSelected(day); }} aria-label={`${dayLong(day)}${holiday ? `, feriado ${holiday}` : ''}`}>
             <span className="day-number">{day.getDate()}</span>{holiday && <span className="holiday-dot" />}{completed ? <span className={`day-status day-balance ${balance >= 0 ? 'complete' : 'shortfall'}`} title={`Saldo: ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))}`}><i />{formatBalanceCompact(balance)}</span> : marks.length ? <span className="day-status"><i />{progress ? formatDuration(progress) : 'Em andamento'}</span> : <span className="day-empty">{holiday ? 'Feriado' : ' '}</span>}
           </button>;
@@ -659,10 +695,14 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
           const key = dateKey(day);
           const marks = days[key]?.marks || [];
           const minutes = workedMinutes(marks);
-          return <div className="chart-column" key={key} title={`${day.getDate()}: ${marks.length ? formatDuration(minutes) : 'sem registros'}`}><span className="chart-value">{minutes ? `${Math.floor(minutes / 60)}h` : ''}</span><div className={`chart-bar ${marks.length === 4 ? 'complete' : ''}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / WORK_MINUTES * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
+          const balance = minutes - WORK_MINUTES;
+          const status = marks.length !== 4 ? 'partial' : balance < 0 ? 'below' : balance === 0 ? 'exact' : 'above';
+          return <div className="chart-column" key={key} title={`${day.getDate()}: ${marks.length ? `${formatDuration(minutes)}${marks.length === 4 ? ` · ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))} de saldo` : ''}` : 'sem registros'}`}><span className="chart-value">{minutes ? formatDuration(minutes) : ''}</span><div className={`chart-bar ${status}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / (WORK_MINUTES * 1.5) * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
         })}
-      </div><div className="chart-axis"><span>0h</span><span>Meta diária: 8h 48min</span></div></div>
+      </div><div className="chart-axis"><span>0h</span><span>Meta diária: {formatDuration(WORK_MINUTES)}</span></div><div className="chart-legend"><span><i className="below"/>Abaixo da carga</span><span><i className="exact"/>Carga cumprida</span><span><i className="above"/>Acima da carga</span></div></div>
     </section>}
+
+    {isMasterAdmin && <section className="page-panel work-settings"><div><p className="eyebrow">ADMINISTRAÇÃO</p><h2>Carga horária global</h2><p>Esta jornada vale para todas as contas e atualiza os saldos e previsões.</p></div><form onSubmit={saveWorkMinutes}><label>Jornada diária <input type="time" value={workMinutesInput} onChange={(event) => setWorkMinutesInput(event.target.value)} required /></label><button className="tool-button primary" type="submit" disabled={workMinutesBusy}>{workMinutesBusy ? 'Salvando…' : 'Salvar para todos'}</button>{(workMinutesError || workMinutesMessage) && <p className={`sheet-feedback ${workMinutesError ? 'error' : ''}`} role="status">{workMinutesError || workMinutesMessage}</p>}</form></section>}
 
     {currentPage==='report'&&<section className="monthly-report-section report-page" id="month-report"><div className="section-heading report-heading"><div><p className="eyebrow">FECHAMENTO</p><h2>Relatório de {monthName(month)}</h2></div><button className="tool-button primary" onClick={exportMonthlyPdf}><FileText size={15} />Exportar PDF</button></div>
       <div className="report-table-card"><div className="report-summary-grid"><div><span>Horas trabalhadas</span><strong>{formatDuration(totalWorked)}</strong></div><div><span>Dias completos</span><strong>{workedDays}</strong></div><div><span>Saldo acumulado</span><strong className={monthlyBalance < 0 ? 'negative-text' : ''}>{workedDays ? formatBalanceCompact(monthlyBalance) : '—'}</strong></div><div><span>Batidas registradas</span><strong>{monthEntries.reduce((sum, [, record]) => sum + (record.marks?.length || 0), 0)}</strong></div></div></div>
@@ -677,13 +717,13 @@ function ClockApp({ session, darkMode, setDarkMode, onSignOut }) {
     <footer className="footer"><span>Feito para uma rotina mais leve.</span><span><i /> Seus dados sincronizam com segurança</span></footer>
     {syncError && <div className="auth-message error" role="status">Falha ao sincronizar seus pontos: {syncError}</div>}
 
-    {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onSaveMarks={(marks) => saveMarks(dateKey(selected), marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} />}
+    {selected && <DayModal date={selected} record={openDay} holiday={holidays[dateKey(selected)]} onClose={() => setSelected(null)} onSaveMarks={(marks) => saveMarks(dateKey(selected), marks)} expected={expectedExit(openDay.marks)} worked={workedMinutes(openDay.marks)} breakLength={breakLength(openDay.marks)} workMinutes={WORK_MINUTES} />}
     {profileOpen && <ProfileModal profile={profile} onSave={saveProfile} onClose={() => setProfileOpen(false)} />}
     {toast && <div className="toast"><span><Check size={15} /></span>{toast}</div>}
   </main>;
 }
 
-function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit, onRegisterNow }) {
+function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit, onRegisterNow, workMinutes }) {
   const key = dateKey(date);
   const today = key === dateKey(new Date());
   const [times, setTimes] = useState(() => Array.from({ length: 4 }, (_, index) => marks[index] || ''));
@@ -694,7 +734,7 @@ function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit
   }, [key, marks.join('|')]);
   const filled = times.filter(Boolean);
   const worked = workedMinutes(filled);
-  const remaining = Math.max(WORK_MINUTES - worked, 0);
+  const remaining = Math.max(workMinutes - worked, 0);
   const expected = expectedExit(filled);
   function validate(candidate) {
     if (candidate.some((time, index) => !time && candidate.slice(index + 1).some(Boolean))) return 'Preencha os horários em sequência, sem pular uma batida.';
@@ -733,14 +773,14 @@ function DayViewCard({ date, marks, holiday, onSave, workedMinutes, expectedExit
       <span className="day-detail-count">{times.filter(Boolean).length}/4 batidas</span>
     </div>
     {holiday && <div className="holiday-banner"><CalendarDays size={15} />{holiday}</div>}
-    <div className="day-detail-progress"><div><span>Horas trabalhadas</span><strong>{formatDuration(worked)} <small>/ 8h 48min</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / WORK_MINUTES, 1) * 100}%` }} /></div></div>
+    <div className="day-detail-progress"><div><span>Horas trabalhadas</span><strong>{formatDuration(worked)} <small>/ {formatDuration(workMinutes)}</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / workMinutes, 1) * 100}%` }} /></div></div>
     <div className="day-detail-marks">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Saída'].map((label, index) => <label className="day-detail-mark" key={label}><span className={`day-detail-index ${times[index] ? 'done' : ''}`}>{index + 1}</span><span className="day-detail-label">{label}</span><input type="time" aria-label={label} value={times[index]} onChange={(event) => setTimes((current) => current.map((value, position) => position === index ? event.target.value : value))} /><button type="button" className="clear-mark-button" onClick={() => clearFrom(index)} disabled={!times[index]} aria-label={`Apagar ${label}`} title={index < 3 ? 'Apagar este horário e os seguintes' : `Apagar ${label}`}><X size={15} /></button></label>)}</div>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="day-detail-footer"><span>{worked >= WORK_MINUTES ? `Jornada completa · ${formatDuration(Math.max(worked - WORK_MINUTES, 0))} de saldo` : `${formatDuration(remaining)} restantes`}{expected ? ` · Saída prevista ${expected}` : ''}</span><div>{today && times.some(Boolean) && times.filter(Boolean).length < 4 && <button type="button" className="tool-button" onClick={registerNow}><Clock3 size={14} />Registrar {['entrada', 'saída para almoço', 'volta do almoço', 'saída'][times.filter(Boolean).length]} agora</button>}<button type="button" className="tool-button primary" onClick={() => save()}>Salvar batidas</button></div></div>
+    <div className="day-detail-footer"><span>{worked >= workMinutes ? `Jornada completa · ${formatDuration(Math.max(worked - workMinutes, 0))} de saldo` : `${formatDuration(remaining)} restantes`}{expected ? ` · Saída prevista ${expected}` : ''}</span><div>{today && times.some(Boolean) && times.filter(Boolean).length < 4 && <button type="button" className="tool-button" onClick={registerNow}><Clock3 size={14} />Registrar {['entrada', 'saída para almoço', 'volta do almoço', 'saída'][times.filter(Boolean).length]} agora</button>}<button type="button" className="tool-button primary" onClick={() => save()}>Salvar batidas</button></div></div>
   </article>;
 }
 
-function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worked, breakLength }) {
+function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worked, breakLength, workMinutes }) {
   const [error, setError] = useState('');
   const marks = record.marks || [];
   const [times, setTimes] = useState(() => Array.from({ length: 4 }, (_, index) => marks[index] || ''));
@@ -758,10 +798,10 @@ function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worke
   }
   return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="day-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-top"><div><p className="eyebrow">REGISTRO DO DIA</p><h2 id="modal-title">{dayLong(date)}</h2></div><button className="icon-button close-button" onClick={onClose} aria-label="Fechar"><X size={19} /></button></div>
     {holiday && <div className="holiday-banner"><CalendarDays size={15} />{holiday}</div>}
-    <div className="modal-progress"><div><span>Jornada registrada</span><strong>{formatDuration(worked)} <small>/ 8h 48min</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / WORK_MINUTES, 1) * 100}%` }} /></div></div>
+    <div className="modal-progress"><div><span>Jornada registrada</span><strong>{formatDuration(worked)} <small>/ {formatDuration(workMinutes)}</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / workMinutes, 1) * 100}%` }} /></div></div>
     {expected && <div className="expected-banner"><span className="expected-icon"><Clock3 size={16} /></span><div><small>PREVISÃO DE SAÍDA</small><strong>{expected}<span>h</span></strong></div><span className="expected-caption">Entrada + jornada<br />+ 1h de almoço</span></div>}
     <form className="batch-marks-form" onSubmit={submit}><div className="batch-marks-heading"><strong>Horários do dia</strong><span>Preencha as batidas que já aconteceram</span></div><div className="batch-mark-list">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Saída'].map((label, index) => <div className="batch-mark-row" key={label}><label className="batch-mark-field"><span>{label}</span><input aria-label={label} type="time" value={times[index]} onChange={(event) => setTimes((current) => current.map((value, position) => position === index ? event.target.value : value))} /></label><button className="clear-mark-button" type="button" onClick={() => clearFrom(index)} disabled={!times[index]} aria-label={`Apagar ${label}`} title={index < 3 ? 'Apagar este horário e os seguintes' : `Apagar ${label}`}><X size={15} /></button></div>)}</div>{error && <p className="form-error">{error}</p>}<p className="form-hint"><Info size={13} />Deixe em branco os horários que ainda não aconteceram. Apagar uma batida também limpa as seguintes.</p><button className="add-button batch-save-button" type="submit">Salvar horários</button></form>
-    {marks.length === 4 && <div className={`balance-banner ${worked >= WORK_MINUTES ? 'positive' : 'negative'}`}><div className="balance-icon">{worked >= WORK_MINUTES ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO DO DIA</small><strong>{worked >= WORK_MINUTES ? '+' : '−'}{formatDuration(Math.abs(worked - WORK_MINUTES))}</strong><span>{worked >= WORK_MINUTES ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div>}
+    {marks.length === 4 && <div className={`balance-banner ${worked >= workMinutes ? 'positive' : 'negative'}`}><div className="balance-icon">{worked >= workMinutes ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO DO DIA</small><strong>{worked >= workMinutes ? '+' : '−'}{formatDuration(Math.abs(worked - workMinutes))}</strong><span>{worked >= workMinutes ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div>}
     <div className="modal-actions"><button className="done-button" onClick={onClose}>Concluir</button></div></section></div>;
 }
 
