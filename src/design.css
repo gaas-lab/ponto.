@@ -485,7 +485,7 @@ html[data-theme="dark"] .profile-dropdown,html[data-theme="dark"] .day-modal,htm
 html[data-theme="dark"] .modal-progress,html[data-theme="dark"] .day-detail-progress{background:#1c1c1e}
 html[data-theme="dark"] .expected-banner{background:#1c2b3e;border-color:#29476b}
 html[data-theme="dark"] .photo-upload-button{background:#1c2b3e;border-color:#29476b;color:#64adff}
-@media(max-width:760px){.app-shell{padding:0 14px 24px}.topbar{height:62px}.overview-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.app-shell{padding:0 14px 24px}.topbar{height:auto;min-height:62px;grid-template-rows:62px 44px}.overview-grid{grid-template-columns:1fr}}
 
 /* Keep completed-day labels readable; the blue belongs to the small status dot. */
 .day-status.complete { background: transparent; }
