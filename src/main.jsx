@@ -8,6 +8,7 @@ import './design.css';
 
 const DEFAULT_WORK_MINUTES = 8 * 60 + 48;
 const BREAK_MINUTES = 60;
+const BALANCE_TOLERANCE_MINUTES = 12;
 const KEY = 'ponto-days-v1';
 const PROFILE_KEY = 'ponto-profile-v1';
 const THEME_KEY = 'ponto-theme-v1';
@@ -18,6 +19,10 @@ const dateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${p
 const parseTime = (s) => s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
 const formatDuration = (mins) => `${Math.floor(mins / 60)}h ${pad(mins % 60)}min`;
 const formatBalanceCompact = (mins) => `${mins >= 0 ? '+' : '−'}${Math.floor(Math.abs(mins) / 60)}h${pad(Math.abs(mins) % 60)}`;
+const dailyBalance = (workedMinutes, expectedMinutes) => {
+  const difference = workedMinutes - expectedMinutes;
+  return Math.abs(difference) <= BALANCE_TOLERANCE_MINUTES ? 0 : difference;
+};
 const minutesToTime = (mins) => {
   const normalized = ((mins % 1440) + 1440) % 1440;
   return `${pad(Math.floor(normalized / 60))}:${pad(normalized % 60)}`;
@@ -314,7 +319,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
   const totalWorked = monthEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks), 0);
   const completedMonthEntries = monthEntries.filter(([, record]) => record.marks.length === 4);
   const workedDays = completedMonthEntries.length;
-  const monthlyBalance = completedMonthEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+  const monthlyBalance = completedMonthEntries.reduce((sum, [, record]) => sum + dailyBalance(workedMinutes(record.marks), WORK_MINUTES), 0);
   const openDay = selected ? days[dateKey(selected)] || { marks: [] } : null;
   const workedToday = days[dateKey(today)] ? workedMinutes(days[dateKey(today)].marks) : 0;
   const todayMarks = days[dateKey(today)]?.marks || [];
@@ -353,7 +358,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
     if (normalOffset < 0) normalOffset += 1440;
     const balanceBeforeToday = useBalanceForExit ? completedMonthEntries
       .filter(([key]) => key !== dateKey(today))
-      .reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0) : 0;
+      .reduce((sum, [, record]) => sum + dailyBalance(workedMinutes(record.marks), WORK_MINUTES), 0) : 0;
     return normalOffset - balanceBeforeToday;
   }
   function minutesUntilExit(marks) {
@@ -436,7 +441,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       const marks = days[key]?.marks || [];
       const complete = marks.length === 4;
       const worked = workedMinutes(marks);
-      const balance = complete ? worked - WORK_MINUTES : null;
+      const balance = complete ? dailyBalance(worked, WORK_MINUTES) : null;
       return [
         new Intl.DateTimeFormat('pt-BR').format(date),
         new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(date),
@@ -451,7 +456,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
     const rangeEntries = Object.entries(days).filter(([key, record]) => key >= startValue && key <= endValue && record.marks?.length);
     const rangeWorked = rangeEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks), 0);
     const rangeComplete = rangeEntries.filter(([, record]) => record.marks.length === 4);
-    const rangeBalance = rangeComplete.reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
+    const rangeBalance = rangeComplete.reduce((sum, [, record]) => sum + dailyBalance(workedMinutes(record.marks), WORK_MINUTES), 0);
     const punchCount = rangeEntries.reduce((sum, [, record]) => sum + record.marks.length, 0);
     const balanceText = rangeComplete.length ? `${rangeBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(rangeBalance))}` : 'Sem dias completos';
     const summary = XLSX.utils.aoa_to_sheet([
@@ -489,7 +494,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       const marks = days[key]?.marks || [];
       const complete = marks.length === 4;
       const worked = workedMinutes(marks);
-      const balance = complete ? worked - WORK_MINUTES : null;
+      const balance = complete ? dailyBalance(worked, WORK_MINUTES) : null;
       return `<tr><td>${escapeHtml(new Intl.DateTimeFormat('pt-BR').format(date))}</td><td>${escapeHtml(new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(date))}</td><td>${escapeHtml(marks[0] || '—')}</td><td>${escapeHtml(marks[1] || '—')}</td><td>${escapeHtml(marks[2] || '—')}</td><td>${escapeHtml(marks[3] || '—')}</td><td>${marks.length ? escapeHtml(formatDuration(worked)) : '—'}</td><td>${balance == null ? '—' : escapeHtml(formatBalanceCompact(balance))}</td><td>${complete ? 'Completo' : marks.length ? 'Incompleto' : 'Sem batidas'}</td></tr>`;
     }).join('');
     const person = escapeHtml((isViewingOwnData ? profile.name : activeUser.full_name) || activeUser.email || 'Usuário');
@@ -708,7 +713,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       <div className={`calendar-card calendar-view-${calendarView}`}>
         {calendarView !== 'day' && <div className="weekdays">{(calendarView === 'week' ? calendarDays : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']).map((d) => <div key={typeof d === 'string' ? d : dateKey(d)}>{typeof d === 'string' ? d : new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric' }).format(d)}</div>)}</div>}
         <div className="calendar-grid">{calendarDays.map((day, idx) => {
-          const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const holiday = holidays[key];
+          const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = dailyBalance(progress, WORK_MINUTES); const holiday = holidays[key];
           if (calendarView === 'day') return <DayViewCard key={key} date={day} marks={marks} holiday={holiday} onSave={(nextMarks) => saveMarks(key, nextMarks)} workedMinutes={workedMinutes} expectedExit={expectedExit} onRegisterNow={(nextMarks) => saveMarks(key, nextMarks)} workMinutes={WORK_MINUTES} />;
           return <button key={`${key}-${idx}`} className={`day-cell ${inMonth ? '' : 'outside'} ${isToday ? 'is-today' : ''} ${holiday ? 'is-holiday' : ''}`} onClick={() => { setCalendarFocus(day); if (calendarView === 'month') setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); setSelected(day); }} aria-label={`${dayLong(day)}${holiday ? `, feriado ${holiday}` : ''}`}>
             <span className="day-number">{day.getDate()}</span>{holiday && <span className="holiday-dot" />}{completed ? <span className={`day-status day-balance ${balance >= 0 ? 'complete' : 'shortfall'}`} title={`Saldo: ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))}`}><i />{formatBalanceCompact(balance)}</span> : marks.length ? <span className="day-status"><i />{progress ? formatDuration(progress) : 'Em andamento'}</span> : <span className="day-empty">{holiday ? 'Feriado' : ' '}</span>}
@@ -726,7 +731,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
           const key = dateKey(day);
           const marks = days[key]?.marks || [];
           const minutes = workedMinutes(marks);
-          const balance = minutes - WORK_MINUTES;
+          const balance = dailyBalance(minutes, WORK_MINUTES);
           const status = marks.length !== 4 ? 'partial' : balance < 0 ? 'below' : balance === 0 ? 'exact' : 'above';
           const balanceLabel = marks.length === 4 ? `Saldo ${balance >= 0 ? '+' : '−'}${formatDuration(Math.abs(balance))}` : 'Dia em andamento';
           return <div className="chart-column" key={key} role="img" tabIndex="0" aria-label={`${day.getDate()} de ${monthName(month)}: ${marks.length ? `${formatDuration(minutes)} trabalhadas. ${balanceLabel}.` : 'sem registros'}`}><div className="chart-tooltip" aria-hidden="true"><strong>{marks.length ? formatDuration(minutes) : 'Sem registros'}</strong><span>{marks.length ? 'trabalhadas' : 'neste dia'}</span>{marks.length === 4 && <small>{balance >= 0 ? '+' : '−'}{formatDuration(Math.abs(balance))} de saldo</small>}</div><div className={`chart-bar ${status}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / (WORK_MINUTES * 1.5) * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
