@@ -486,6 +486,18 @@ html[data-theme="dark"] .day-cell.is-today .day-number{background:#0a84ff;color:
 html[data-theme="dark"] .day-status.day-balance.positive i { background: #55c878; }
 html[data-theme="dark"] .day-status.day-balance.negative i { background: #ff7272; }
 html[data-theme="dark"] .day-status.day-balance.neutral i { background: #0a84ff; }
+.monthly-balances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.monthly-balances .monthly-balance { min-width: 0; margin-top: 0; }
+.monthly-balances .monthly-balance-label { white-space: normal; }
+@media (max-width: 480px) {
+  .monthly-balances { gap: 8px; }
+  .monthly-balances .monthly-balance { padding: 10px 8px; gap: 7px; }
+  .monthly-balances .monthly-balance-icon { width: 28px; height: 28px; }
+  .monthly-balances .monthly-balance-icon svg { width: 16px; }
+  .monthly-balances .monthly-balance strong { font-size: 16px; }
+  .monthly-balances .monthly-balance small { font-size: 7px; letter-spacing: .4px; }
+  .monthly-balances .monthly-balance-label { font-size: 8px; }
+}
 html[data-theme="dark"] .tool-button:not(.primary),html[data-theme="dark"] .export-button,html[data-theme="dark"] .text-button{background:#3a3a3c;border-color:#48484a;color:#f5f5f7}
 html[data-theme="dark"] .tool-button:not(.primary):hover,html[data-theme="dark"] .export-button:hover{background:#48484a}
 html[data-theme="dark"] .auth-shell{background:#1c1c1e}html[data-theme="dark"] .auth-visual{background:#111112}
