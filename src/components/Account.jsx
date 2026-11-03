@@ -12,6 +12,7 @@ export function AuthScreen({ configured, darkMode, setDarkMode }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const isSignup = view === 'signup';
+  const isForgotPassword = view === 'forgot-password';
 
   function switchView(next) {
     setView(next);
@@ -33,7 +34,13 @@ export function AuthScreen({ configured, darkMode, setDarkMode }) {
     }
     setBusy(true);
     try {
-      if (isSignup) {
+      if (isForgotPassword) {
+        const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin,
+        });
+        if (authError) throw authError;
+        setMessage('Se este e-mail estiver cadastrado, você receberá um link para criar uma nova senha.');
+      } else if (isSignup) {
         const { data, error: authError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -63,21 +70,49 @@ export function AuthScreen({ configured, darkMode, setDarkMode }) {
       <div className="visual-orb orb-one" /><div className="visual-orb orb-two" />
     </section>
     <section className="auth-panel"><button className="auth-theme-button" onClick={() => setDarkMode((mode) => !mode)} aria-label={darkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}>{darkMode ? <Sun size={16} /> : <Moon size={16} />}<span>{darkMode ? 'Modo claro' : 'Modo escuro'}</span></button>
-      <div className="auth-card"><div className="auth-card-heading"><span className="auth-small-brand"><span className="brand-mark"><Clock3 size={17} /></span> Ponto<span className="brand-dot">.</span></span><p className="eyebrow">{isSignup ? 'COMECE POR AQUI' : 'BEM-VINDO DE VOLTA'}</p><h2>{isSignup ? 'Crie sua conta' : 'Entre na sua conta'}</h2><p className="auth-subtitle">{isSignup ? 'Seu espaço para acompanhar o seu tempo.' : 'Seu dia continua de onde você parou.'}</p></div>
+      <div className="auth-card"><div className="auth-card-heading"><span className="auth-small-brand"><span className="brand-mark"><Clock3 size={17} /></span> Ponto<span className="brand-dot">.</span></span><p className="eyebrow">{isSignup ? 'COMECE POR AQUI' : isForgotPassword ? 'RECUPERAÇÃO DE ACESSO' : 'BEM-VINDO DE VOLTA'}</p><h2>{isSignup ? 'Crie sua conta' : isForgotPassword ? 'Esqueceu sua senha?' : 'Entre na sua conta'}</h2><p className="auth-subtitle">{isSignup ? 'Seu espaço para acompanhar o seu tempo.' : isForgotPassword ? 'Informe seu e-mail e enviaremos um link para redefinir a senha.' : 'Seu dia continua de onde você parou.'}</p></div>
         {message && <div className="auth-message success"><Check size={16} />{message}</div>}
         {error && <div className="auth-message error">{error}</div>}
         <form className="auth-form" onSubmit={submit}>
           {isSignup && <label className="auth-field"><span>Seu nome</span><div className="auth-input-wrap"><UserRound size={17} /><input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Como podemos te chamar?" required disabled={busy} /></div></label>}
           <label className="auth-field"><span>E-mail</span><div className="auth-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" required disabled={busy} /></div></label>
-          <label className="auth-field"><span>Senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? 'Pelo menos 8 caracteres' : 'Sua senha'} required disabled={busy} minLength={isSignup ? 8 : undefined} /></div></label>
-          <button className="auth-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} />Aguarde…</> : <>{isSignup ? 'Criar minha conta' : 'Entrar'}<ArrowRight size={16} /></>}</button>
+          {!isForgotPassword && <label className="auth-field"><span>Senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? 'Pelo menos 8 caracteres' : 'Sua senha'} required disabled={busy} minLength={isSignup ? 8 : undefined} /></div></label>}
+          {view === 'login' && <button className="auth-forgot-link" type="button" onClick={() => switchView('forgot-password')}>Esqueci minha senha</button>}
+          <button className="auth-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} />Aguarde…</> : <>{isSignup ? 'Criar minha conta' : isForgotPassword ? 'Enviar link de recuperação' : 'Entrar'}<ArrowRight size={16} /></>}</button>
         </form>
-        <div className="auth-switch">{isSignup ? <><span>Já tem uma conta?</span><button onClick={() => switchView('login')}><ArrowLeft size={14} />Voltar para o login</button></> : <><span>Ainda não tem uma conta?</span><button onClick={() => switchView('signup')}>Criar cadastro <ArrowRight size={14} /></button></>}</div>
+        <div className="auth-switch">{isSignup ? <><span>Já tem uma conta?</span><button onClick={() => switchView('login')}><ArrowLeft size={14} />Voltar para o login</button></> : isForgotPassword ? <><span>Lembrou a senha?</span><button onClick={() => switchView('login')}><ArrowLeft size={14} />Voltar para o login</button></> : <><span>Ainda não tem uma conta?</span><button onClick={() => switchView('signup')}>Criar cadastro <ArrowRight size={14} /></button></>}</div>
         <p className="auth-privacy"><LockKeyhole size={12} /> Seus registros ficam associados à sua conta.</p>
       </div>
       <div className="auth-bottom">Feito para uma rotina mais leve.</div>
     </section>
   </main>;
+}
+
+export function PasswordRecoveryScreen({ onComplete }) {
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    if (password.length < 8) { setError('A senha precisa ter pelo menos 8 caracteres.'); return; }
+    if (password !== confirmation) { setError('As senhas não conferem.'); return; }
+    setBusy(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      await supabase.auth.signOut();
+      onComplete();
+    } catch (authError) {
+      setError(friendlyAuthError(authError.message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <main className="auth-shell"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark"><Clock3 size={20} strokeWidth={2.4} /></span><span>Ponto<span className="brand-dot">.</span></span></div><div className="visual-copy"><span className="visual-kicker"><i /> RECUPERAÇÃO DE ACESSO</span><h1>Uma nova<br />senha, <em>e pronto.</em></h1><p>Escolha uma senha segura para voltar a acompanhar sua jornada.</p></div><div className="visual-footer"><span>CONTROLE DE PONTO PESSOAL</span><span>BRASIL · UTC−3</span></div><div className="visual-orb orb-one" /><div className="visual-orb orb-two" /></section><section className="auth-panel"><div className="auth-card"><div className="auth-card-heading"><span className="auth-small-brand"><span className="brand-mark"><Clock3 size={17} /></span> Ponto<span className="brand-dot">.</span></span><p className="eyebrow">RECUPERAÇÃO DE ACESSO</p><h2>Crie uma nova senha</h2><p className="auth-subtitle">Use pelo menos 8 caracteres.</p></div>{error && <div className="auth-message error">{error}</div>}<form className="auth-form" onSubmit={submit}><label className="auth-field"><span>Nova senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required disabled={busy} /></div></label><label className="auth-field"><span>Confirme a nova senha</span><div className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={8} required disabled={busy} /></div></label><button className="auth-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={17} />Salvando…</> : <>Salvar nova senha<ArrowRight size={16} /></>}</button></form><p className="auth-privacy"><LockKeyhole size={12} /> Após salvar, entre com sua nova senha.</p></div></section></main>;
 }
 
 function friendlyAuthError(message = '') {
