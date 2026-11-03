@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Moon, Sun, UserRound, X, Upload, Trash2, History, Bell } from 'lucide-react';
-import { AuthScreen, ProfileModal } from './components/Account.jsx';
+import { AuthScreen, PasswordRecoveryScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 import { saldoDia, saldoMes } from './lib/balance.js';
 import './styles.css';
@@ -28,6 +28,7 @@ const dayLong = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 
 
 function App() {
   const [session, setSession] = useState(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === 'dark');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -53,12 +54,14 @@ function App() {
   }, [darkMode]);
   useEffect(() => {
     if (!supabase) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       setSession(nextSession);
       setAuthLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
+  if (passwordRecovery) return <PasswordRecoveryScreen onComplete={() => setPasswordRecovery(false)} />;
   if (authLoading) return <div className="auth-loading"><span className="brand-mark"><Clock3 size={19} /></span><span>Carregando seu espaço…</span></div>;
   if (!session) return <AuthScreen configured={isSupabaseConfigured} darkMode={darkMode} setDarkMode={setDarkMode} />;
   return <ClockApp key={session.user.id} session={session} darkMode={darkMode} setDarkMode={setDarkMode} installPrompt={installPrompt} setInstallPrompt={setInstallPrompt} onSignOut={() => supabase.auth.signOut()} />;

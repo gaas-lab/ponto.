@@ -24,3 +24,5 @@ html[data-theme="dark"] .auth-card{background:#0a0a0b;border-color:#242428;box-s
 html[data-theme="dark"] .auth-input-wrap{background:#111114;border-color:#303036}
 html[data-theme="dark"] .auth-submit{background:#3333bd}
 html[data-theme="dark"] .auth-submit:hover{background:#4141d4}
+.auth-forgot-link{align-self:flex-end;margin:-8px 0 -4px;padding:4px 0;border:0;background:transparent;color:#3569aa;font:700 10px 'DM Sans',sans-serif;cursor:pointer}.auth-forgot-link:hover{text-decoration:underline}
+html[data-theme="dark"] .auth-forgot-link{color:#8db7ff}
