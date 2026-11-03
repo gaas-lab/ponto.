@@ -3,12 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BarChart3, CalendarDays, Check, ChevronDown, Clock3, Download, FileSpreadsheet, FileText, Info, LogOut, Moon, Sun, UserRound, X, Upload, Trash2, History, Bell } from 'lucide-react';
 import { AuthScreen, ProfileModal } from './components/Account.jsx';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
+import { saldoDia, saldoMes } from './lib/balance.js';
 import './styles.css';
 import './design.css';
 
 const DEFAULT_WORK_MINUTES = 8 * 60 + 48;
 const BREAK_MINUTES = 60;
-const BALANCE_TOLERANCE_MINUTES = 12;
 const KEY = 'ponto-days-v1';
 const PROFILE_KEY = 'ponto-profile-v1';
 const THEME_KEY = 'ponto-theme-v1';
@@ -16,13 +16,9 @@ const CALENDAR_VIEW_KEY = 'ponto-calendar-view-v1';
 const EXIT_BALANCE_KEY = 'ponto-exit-balance-v1';
 const pad = (n) => String(n).padStart(2, '0');
 const dateKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-const parseTime = (s) => s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
+const parseTime = (s) => s ? Number(s.replaceAll('*', '').slice(0, 2)) * 60 + Number(s.replaceAll('*', '').slice(3, 5)) : null;
 const formatDuration = (mins) => `${Math.floor(mins / 60)}h ${pad(mins % 60)}min`;
 const formatBalanceCompact = (mins) => `${mins >= 0 ? '+' : '−'}${Math.floor(Math.abs(mins) / 60)}h${pad(Math.abs(mins) % 60)}`;
-const dailyBalance = (workedMinutes, expectedMinutes) => {
-  const difference = workedMinutes - expectedMinutes;
-  return difference > 0 && difference < BALANCE_TOLERANCE_MINUTES ? 0 : difference;
-};
 const minutesToTime = (mins) => {
   const normalized = ((mins % 1440) + 1440) % 1440;
   return `${pad(Math.floor(normalized / 60))}:${pad(normalized % 60)}`;
@@ -320,7 +316,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
   const completedMonthEntries = monthEntries.filter(([, record]) => record.marks.length === 4);
   const workedDays = completedMonthEntries.length;
   const monthlyBalance = completedMonthEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
-  const companyMonthlyBalance = completedMonthEntries.reduce((sum, [, record]) => sum + dailyBalance(workedMinutes(record.marks), WORK_MINUTES), 0);
+  const companyMonthlyBalance = saldoMes(completedMonthEntries.map(([, record]) => record.marks));
   const openDay = selected ? days[dateKey(selected)] || { marks: [] } : null;
   const workedToday = days[dateKey(today)] ? workedMinutes(days[dateKey(today)].marks) : 0;
   const todayMarks = days[dateKey(today)]?.marks || [];
@@ -443,7 +439,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       const complete = marks.length === 4;
       const worked = workedMinutes(marks);
       const balance = complete ? worked - WORK_MINUTES : null;
-      const companyBalance = complete ? dailyBalance(worked, WORK_MINUTES) : null;
+      const companyBalance = complete ? saldoDia(marks) : null;
       return [
         new Intl.DateTimeFormat('pt-BR').format(date),
         new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(date),
@@ -460,7 +456,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
     const rangeWorked = rangeEntries.reduce((sum, [, record]) => sum + workedMinutes(record.marks), 0);
     const rangeComplete = rangeEntries.filter(([, record]) => record.marks.length === 4);
     const rangeBalance = rangeComplete.reduce((sum, [, record]) => sum + workedMinutes(record.marks) - WORK_MINUTES, 0);
-    const rangeCompanyBalance = rangeComplete.reduce((sum, [, record]) => sum + dailyBalance(workedMinutes(record.marks), WORK_MINUTES), 0);
+    const rangeCompanyBalance = saldoMes(rangeComplete.map(([, record]) => record.marks));
     const punchCount = rangeEntries.reduce((sum, [, record]) => sum + record.marks.length, 0);
     const balanceText = rangeComplete.length ? `${rangeBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(rangeBalance))}` : 'Sem dias completos';
     const companyBalanceText = rangeComplete.length ? `${rangeCompanyBalance >= 0 ? '+' : '−'}${formatDuration(Math.abs(rangeCompanyBalance))}` : 'Sem dias completos';
@@ -473,7 +469,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       ['Saldo acumulado', balanceText],
       ['Saldo Aristocrata (empresa)', companyBalanceText],
       ['Como o saldo normal é calculado', 'Soma dos saldos diários dos dias com quatro batidas, contando cada minuto.'],
-      ['Como o saldo Aristocrata é calculado', 'Hora extra abaixo de 12 minutos zera; com 12 minutos ou mais, conta o total. Débitos são descontados integralmente, minuto a minuto.'],
+      ['Como o saldo Aristocrata é calculado', 'O saldo de cada dia com quatro batidas é zerado quando fica entre -10 e +10 minutos. Acima desse limite, conta o saldo inteiro. O mês soma os saldos diários já tratados.'],
       [],
       ['Saldo diário positivo indica horas extras; negativo indica horas devidas.'],
     ]);
@@ -502,7 +498,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       const complete = marks.length === 4;
       const worked = workedMinutes(marks);
       const balance = complete ? worked - WORK_MINUTES : null;
-      const companyBalance = complete ? dailyBalance(worked, WORK_MINUTES) : null;
+      const companyBalance = complete ? saldoDia(marks) : null;
       return `<tr><td>${escapeHtml(new Intl.DateTimeFormat('pt-BR').format(date))}</td><td>${escapeHtml(new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(date))}</td><td>${escapeHtml(marks[0] || '—')}</td><td>${escapeHtml(marks[1] || '—')}</td><td>${escapeHtml(marks[2] || '—')}</td><td>${escapeHtml(marks[3] || '—')}</td><td>${marks.length ? escapeHtml(formatDuration(worked)) : '—'}</td><td>${balance == null ? '—' : escapeHtml(formatBalanceCompact(balance))}</td><td>${companyBalance == null ? '—' : escapeHtml(formatBalanceCompact(companyBalance))}</td><td>${complete ? 'Completo' : marks.length ? 'Incompleto' : 'Sem batidas'}</td></tr>`;
     }).join('');
     const person = escapeHtml((isViewingOwnData ? profile.name : activeUser.full_name) || activeUser.email || 'Usuário');
@@ -516,7 +512,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       <h1>Relatório mensal de ponto</h1><p>${escapeHtml(person)} · ${escapeHtml(monthName(month))} · Jornada diária prevista: ${escapeHtml(formatDuration(WORK_MINUTES))}</p>
       <div class="stats"><div>Horas trabalhadas<strong>${escapeHtml(formatDuration(totalWorked))}</strong></div><div>Dias completos<strong>${workedDays}</strong></div><div>Saldo normal<strong>${workedDays ? escapeHtml(formatBalanceCompact(monthlyBalance)) : '—'}</strong></div><div>Saldo Aristocrata (empresa)<strong>${workedDays ? escapeHtml(formatBalanceCompact(companyMonthlyBalance)) : '—'}</strong></div></div>
       <table><thead><tr><th>Data</th><th>Dia</th><th>Entrada</th><th>Saída almoço</th><th>Volta almoço</th><th>Saída</th><th>Horas</th><th>Saldo normal</th><th>Aristocrata</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-      <footer>Gerado pelo Ponto. O intervalo de almoço não conta como hora trabalhada. No saldo Aristocrata, hora extra abaixo de 12 minutos zera; com 12 minutos ou mais, conta o total. Débitos são integrais.</footer>
+      <footer>Gerado pelo Ponto. O intervalo de almoço não conta como hora trabalhada. No saldo Aristocrata, diferenças diárias de até 10 minutos em qualquer direção zeram; acima desse limite, conta o saldo inteiro.</footer>
       <script>window.addEventListener('load',()=>window.print());</script></body></html>`);
     reportWindow.document.close();
     setSheetMessage('Relatório aberto para impressão. Escolha “Salvar como PDF” no destino da impressão.');
@@ -712,7 +708,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
     <section className="welcome-row"><div><p className="eyebrow">{({clock:'SUA ROTINA',dashboard:'VISÃO GERAL',report:'ACOMPANHAMENTO',history:'SEUS REGISTROS',notifications:'PREFERÊNCIAS'})[currentPage]}</p><h1>{currentPage==='clock'?'Lançamento de horas':currentPage==='dashboard'?'Dashboard':({report:'Relatório mensal',history:'Histórico completo',notifications:'Notificações de horário'})[currentPage]}<span className="greeting-dot">.</span></h1><p className="welcome-sub">{currentPage==='clock'?'Acompanhe sua jornada e registre os horários do dia.':currentPage==='dashboard'?'Resumo das suas horas e do seu saldo neste mês.':'Acompanhe sua rotina de trabalho em um só lugar.'}</p>{adminUsersError && isMasterAdmin && <p className="form-error">Não foi possível carregar a lista de usuários: {adminUsersError}</p>}</div><div className="date-chip"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(today)}</span></div></section>
 
     {currentPage==='clock'&&<section className="overview-grid" id="dashboard">
-      <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO NORMAL</small><strong>{workedDays ? formatBalanceCompact(monthlyBalance) : '—'}</strong></div><span className="monthly-balance-label">Todos os minutos</span></div><div className={`monthly-balance company-balance ${companyMonthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ARISTOCRATA (EMPRESA)</small><strong>{workedDays ? formatBalanceCompact(companyMonthlyBalance) : '—'}</strong></div><span className="monthly-balance-label">Extra ≥12 min; débito integral</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
+      <article className="recent-card hours-card"><div className="card-heading"><div><p className="eyebrow">VISÃO GERAL DO MÊS</p><h3>{isViewingOwnData ? 'Suas horas' : `Horas de ${activeUser.full_name || activeUser.email}`}</h3></div></div><div className={`monthly-balance ${monthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO NORMAL</small><strong>{workedDays ? formatBalanceCompact(monthlyBalance) : '—'}</strong></div><span className="monthly-balance-label">Todos os minutos</span></div><div className={`monthly-balance company-balance ${companyMonthlyBalance >= 0 ? 'positive' : 'negative'}`}><span className="monthly-balance-icon"><Clock3 size={19} /></span><div><small>SALDO ARISTOCRATA (EMPRESA)</small><strong>{workedDays ? formatBalanceCompact(companyMonthlyBalance) : '—'}</strong></div><span className="monthly-balance-label">Tolerância diária de 10 min</span></div><div className="hours-card-foot"><span>{formatDuration(totalWorked)} trabalhadas</span><span>{workedDays} {workedDays === 1 ? 'dia completo' : 'dias completos'}</span></div></article>
       <article className="exit-card"><div className="exit-icon"><Clock3 size={19} /></div><div className="exit-label">PREVISÃO DE SAÍDA</div><label className="exit-balance-toggle"><input type="checkbox" checked={useBalanceForExit} onChange={(event) => setUseBalanceForExit(event.target.checked)} />Usar saldo de horas</label>{todayExpected ? <><div className="exit-estimates"><div><small>{useBalanceForExit ? 'Com saldo' : 'Prevista'}</small><strong>{useBalanceForExit ? todayAdjustedExit : todayExpected}</strong></div></div><div className="exit-note">{useBalanceForExit ? `Saldo acumulado: ${formatBalanceCompact(monthlyBalance)}` : 'Considerando apenas a jornada de hoje'}</div><div className="exit-countdown exit-countdown-card"><Clock3 size={14} /><strong>{exitCountdown > 0 ? `Faltam ${formatCountdown(exitCountdown)}` : 'Horário previsto atingido'}</strong><small>até a saída</small></div></> : <><div className="exit-placeholder">— — : — —</div><div className="exit-note">Registre a entrada para calcular</div><div className="exit-countdown exit-countdown-card waiting"><Clock3 size={14} /><strong>Contador aguardando entrada</strong></div></>}</article>
     </section>}
 
@@ -721,7 +717,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
       <div className={`calendar-card calendar-view-${calendarView}`}>
         {calendarView !== 'day' && <div className="weekdays">{(calendarView === 'week' ? calendarDays : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']).map((d) => <div key={typeof d === 'string' ? d : dateKey(d)}>{typeof d === 'string' ? d : new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric' }).format(d)}</div>)}</div>}
         <div className="calendar-grid">{calendarDays.map((day, idx) => {
-          const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const companyBalance = dailyBalance(progress, WORK_MINUTES); const holiday = holidays[key];
+          const key = dateKey(day); const inMonth = calendarView !== 'month' || day.getMonth() === month.getMonth(); const isToday = key === dateKey(today); const record = days[key]; const marks = record?.marks || []; const progress = workedMinutes(marks); const completed = marks.length === 4; const balance = progress - WORK_MINUTES; const companyBalance = saldoDia(marks); const holiday = holidays[key];
           if (calendarView === 'day') return <DayViewCard key={key} date={day} marks={marks} holiday={holiday} onSave={(nextMarks) => saveMarks(key, nextMarks)} workedMinutes={workedMinutes} expectedExit={expectedExit} onRegisterNow={(nextMarks) => saveMarks(key, nextMarks)} workMinutes={WORK_MINUTES} />;
           return <button key={`${key}-${idx}`} className={`day-cell ${inMonth ? '' : 'outside'} ${isToday ? 'is-today' : ''} ${holiday ? 'is-holiday' : ''}`} onClick={() => { setCalendarFocus(day); if (calendarView === 'month') setMonth(new Date(day.getFullYear(), day.getMonth(), 1)); setSelected(day); }} aria-label={`${dayLong(day)}${holiday ? `, feriado ${holiday}` : ''}`}>
             <span className="day-number">{day.getDate()}</span>{holiday && <span className="holiday-dot" />}{completed ? <span className={`day-status day-balance ${balance >= 0 ? 'complete' : 'shortfall'}`} title={`Normal: ${formatBalanceCompact(balance)} · Aristocrata: ${formatBalanceCompact(companyBalance)}`}><i />{formatBalanceCompact(balance)} <small>N</small><br />{formatBalanceCompact(companyBalance)} <small>A</small></span> : marks.length ? <span className="day-status"><i />{progress ? formatDuration(progress) : 'Em andamento'}</span> : <span className="day-empty">{holiday ? 'Feriado' : ' '}</span>}
@@ -740,7 +736,7 @@ function ClockApp({ session, darkMode, setDarkMode, installPrompt, setInstallPro
           const marks = days[key]?.marks || [];
           const minutes = workedMinutes(marks);
           const balance = minutes - WORK_MINUTES;
-          const companyBalance = dailyBalance(minutes, WORK_MINUTES);
+          const companyBalance = saldoDia(marks);
           const status = marks.length !== 4 ? 'partial' : balance < 0 ? 'below' : balance === 0 ? 'exact' : 'above';
           const balanceLabel = marks.length === 4 ? `Saldo normal ${formatBalanceCompact(balance)}; Aristocrata ${formatBalanceCompact(companyBalance)}` : 'Dia em andamento';
           return <div className="chart-column" key={key} role="img" tabIndex="0" aria-label={`${day.getDate()} de ${monthName(month)}: ${marks.length ? `${formatDuration(minutes)} trabalhadas. ${balanceLabel}.` : 'sem registros'}`}><div className="chart-tooltip" aria-hidden="true"><strong>{marks.length ? formatDuration(minutes) : 'Sem registros'}</strong><span>{marks.length ? 'trabalhadas' : 'neste dia'}</span>{marks.length === 4 && <small>Normal {formatBalanceCompact(balance)} · empresa {formatBalanceCompact(companyBalance)}</small>}</div><div className={`chart-bar ${status}`} style={{ height: `${Math.max(minutes ? Math.min(minutes / (WORK_MINUTES * 1.5) * 100, 100) : 0, minutes ? 4 : 1)}%` }} /><span className="chart-label">{day.getDate()}</span></div>;
@@ -847,7 +843,7 @@ function DayModal({ date, record, holiday, onClose, onSaveMarks, expected, worke
     <div className="modal-progress"><div><span>Jornada registrada</span><strong>{formatDuration(worked)} <small>/ {formatDuration(workMinutes)}</small></strong></div><div className="mini-progress"><span style={{ width: `${Math.min(worked / workMinutes, 1) * 100}%` }} /></div></div>
     {expected && <div className="expected-banner"><span className="expected-icon"><Clock3 size={16} /></span><div><small>PREVISÃO DE SAÍDA</small><strong>{expected}<span>h</span></strong></div><span className="expected-caption">Entrada + jornada<br />+ 1h de almoço</span></div>}
     <form className="batch-marks-form" onSubmit={submit}><div className="batch-marks-heading"><strong>Horários do dia</strong><span>Preencha as batidas que já aconteceram</span></div><div className="batch-mark-list">{['Entrada', 'Saída para almoço', 'Volta do almoço', 'Saída'].map((label, index) => <div className="batch-mark-row" key={label}><label className="batch-mark-field"><span>{label}</span><input aria-label={label} type="time" value={times[index]} onChange={(event) => setTimes((current) => current.map((value, position) => position === index ? event.target.value : value))} /></label><button className="clear-mark-button" type="button" onClick={() => clearFrom(index)} disabled={!times[index]} aria-label={`Apagar ${label}`} title={index < 3 ? 'Apagar este horário e os seguintes' : `Apagar ${label}`}><X size={15} /></button></div>)}</div>{error && <p className="form-error">{error}</p>}<p className="form-hint"><Info size={13} />Deixe em branco os horários que ainda não aconteceram. Apagar uma batida também limpa as seguintes.</p><button className="add-button batch-save-button" type="submit">Salvar horários</button></form>
-    {marks.length === 4 && <><div className={`balance-banner ${worked >= workMinutes ? 'positive' : 'negative'}`}><div className="balance-icon">{worked >= workMinutes ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO NORMAL DO DIA</small><strong>{formatBalanceCompact(worked - workMinutes)}</strong><span>{worked >= workMinutes ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div><div className={`balance-banner company-balance ${dailyBalance(worked, workMinutes) >= 0 ? 'positive' : 'negative'}`}><div className="balance-icon"><Clock3 size={17} /></div><div><small>SALDO ARISTOCRATA (EMPRESA)</small><strong>{formatBalanceCompact(dailyBalance(worked, workMinutes))}</strong><span>Extra a partir de 12 min; débito integral</span></div></div></>}
+    {marks.length === 4 && <><div className={`balance-banner ${worked - workMinutes >= 0 ? 'positive' : 'negative'}`}><div className="balance-icon">{worked - workMinutes >= 0 ? <Check size={17} /> : <Clock3 size={17} />}</div><div><small>SALDO NORMAL DO DIA</small><strong>{formatBalanceCompact(worked - workMinutes)}</strong><span>{worked - workMinutes >= 0 ? 'Hora extra' : 'Horas devidas'}</span></div><span className="balance-worked">{formatDuration(worked)} trabalhadas</span></div><div className={`balance-banner company-balance ${saldoDia(marks) >= 0 ? 'positive' : 'negative'}`}><div className="balance-icon"><Clock3 size={17} /></div><div><small>SALDO ARISTOCRATA (EMPRESA)</small><strong>{formatBalanceCompact(saldoDia(marks))}</strong><span>Tolerância diária de 10 min; excedendo, conta o saldo inteiro</span></div></div></>}
     <div className="modal-actions"><button className="done-button" onClick={onClose}>Concluir</button></div></section></div>;
 }
 
